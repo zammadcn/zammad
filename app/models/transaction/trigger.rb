@@ -23,7 +23,6 @@ class Transaction::Trigger
   end
 
   def perform
-
     # return if we run import mode
     return if Setting.get('import_mode')
 
@@ -38,7 +37,6 @@ class Transaction::Trigger
     original_user_id = UserInfo.current_user_id
 
     Ticket.perform_triggers(ticket, article, @item, @params)
-
     UserInfo.current_user_id = original_user_id
   end
 

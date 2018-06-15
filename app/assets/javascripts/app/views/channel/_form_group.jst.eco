@@ -1,0 +1,8 @@
+<div class="input form-group <%- if @params.isHalfSize: %> formGroup--halfSize <%- end %>">
+  <div class="formGroup-label">
+    <label for="<%- @params.input_id %>"><%- @T(@params.label) %></label>
+  </div>
+  <div class="controls">
+    <%- @params.yield %>
+  </div>
+</div>

@@ -263,6 +263,49 @@ class App.Controller extends Spine.Controller
     return true if @Session.get()
     false
 
+  formInput: (params) ->
+    elem = document.createElement('input')
+    elem.setAttribute('autocomplete', 'off')
+
+    if params.required
+      params['required'] = 'required'
+
+    if params.value
+      params['value'] = params.value
+
+    if !params.type
+      params['type'] = 'text'
+
+    if !params.id && params.name
+      params['id'] = "form-#{params.name}"
+
+    for own key, value of params
+      elem.setAttribute(key, value)
+
+    elem.outerHTML
+
+  formGroupWrapper: (params, e) ->
+    if _.isFunction(params)
+      e = params
+      params = {}
+
+    params['yield'] = $.trim(e())
+
+    inputSelector = 'input,select,textarea'
+
+    inputField = if $(params.yield).is(inputSelector)
+                   $(params.yield)
+                 else if $(params.yield).find(inputSelector).length > 0
+                   $(params.yield).find(inputSelector)
+
+    if inputField.length > 0
+      params['input_id'] = inputField.attr('id')
+
+      if not params['label']
+        params['label'] = inputField.attr('name')
+
+    App.view('channel/_form_group')({context: @, params: params})
+
   frontendTime: (timestamp, row = {}) ->
     if !row['subclass']
       row['subclass'] = ''
@@ -639,6 +682,9 @@ class App.ControllerSubContent extends App.Controller
       @permissionCheckRedirect(@requiredPermission)
 
     super
+
+  headerHelper: (params) ->
+    App.view('channel/_header')(context: @, params: params)
 
   show: =>
     return if !@header

@@ -88,6 +88,14 @@ reload config settings
     load(true)
   end
 
+  def self.import?
+    Setting.get('import_mode') == true
+  end
+
+  def self.developer?
+    Setting.get('developer_mode') == true
+  end
+
   private
 
   # load values and cache them

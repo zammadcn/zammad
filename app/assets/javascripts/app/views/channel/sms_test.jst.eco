@@ -1,0 +1,12 @@
+<div class="alert alert--danger hide" role="alert"></div>
+<div class="alert alert--success hide" role="success"></div>
+
+<fieldset>
+  <%- @formGroupWrapper => %>
+    <%- @formInput(name: 'recipient', required: true) %>
+  <% end %>
+
+  <%- @formGroupWrapper => %>
+    <%- @formInput(name: 'message', required: true, value: @T('Test message from Zammad')) %>
+  <% end %>
+</fieldset>

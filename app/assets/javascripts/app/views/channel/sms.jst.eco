@@ -1,0 +1,23 @@
+<%- @headerHelper(header: 'SMS', hasSwitch: true) %>
+
+<div class="page-content">
+  <p><%- @T('This channel can be used in triggers to send SMS notifications.') %></p>
+
+  <h2><%- @T('Settings') %></h2>
+
+  <div class="alert alert--danger hidden" role="alert"></div>
+
+  <form class="js-channelForm">
+    <fieldset>
+      <%- @formGroupWrapper {label: 'Provider'}, => %>
+        <%- @renderProvider() %>
+      <% end %>
+    </fieldset>
+
+    <div class="content-controls-align-right">
+      <button type="button" class="btn btn--danger btn--secondary js-delete"><%- @T('Delete') %></button>
+      <button type="button" class="btn js-testButton"><%- @T('Test') %></button>
+      <input type="submit" class="btn btn--success js-submit" value="<%- @T('Save') %>">
+    </div>
+  </form>
+</div>

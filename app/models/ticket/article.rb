@@ -338,10 +338,41 @@ returns
   class Sender < ApplicationModel
     include ChecksLatestChangeObserved
     validates :name, presence: true
+
+=begin
+
+Check if sender exists, but is not customer
+
+  record = Ticket::Article.first
+  Ticket::Article::Sender.not_customer?(record)
+
+=end
+
+    def self.not_customer?(record)
+      return false if !record.sender_id
+
+      sender = Ticket::Article::Sender.lookup(id: record.sender_id)
+      sender&.name != 'Customer'
+    end
   end
 
   class Type < ApplicationModel
     include ChecksLatestChangeObserved
     validates :name, presence: true
+
+=begin
+
+Check if type exists and is correct
+
+  record = Ticket::Article.first
+  Ticket::Article::Type.named?(record, 'sms')
+
+=end
+
+    def self.named?(record, string)
+      return false if !record.type_id
+      type = Ticket::Article::Type.lookup(id: record.type_id)
+      type&.name == string
+    end
   end
 end

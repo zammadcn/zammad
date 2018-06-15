@@ -285,6 +285,21 @@ send via account
     result
   end
 
+  # load driver class and return it
+  def self.driver_instance(adapter)
+    # we need to require each channel backend individually otherwise we get a
+    # 'warning: toplevel constant Twitter referenced by Channel::Driver::Twitter' error e.g.
+    # so we have to convert the channel name to the filename via Rails String.underscore
+    # http://stem.ps/rails/2015/01/25/ruby-gotcha-toplevel-constant-referenced-by.html
+    require "channel/driver/#{adapter.to_filename}"
+
+    "Channel::Driver::#{adapter.to_classname}".safe_constantize
+  end
+
+  def driver_instance
+    self.class.driver_instance(options[:adapter])
+  end
+
   private
 
   def email_address_check
