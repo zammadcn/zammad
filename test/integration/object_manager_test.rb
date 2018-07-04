@@ -699,7 +699,7 @@ class ObjectManagerTest < ActiveSupport::TestCase
     assert_equal(0, ObjectManager::Attribute.migrations.count)
 
     # create example ticket
-    ticket1 = Ticket.create(
+    ticket1 = Ticket.create!(
       title: 'some attribute test3',
       group: Group.lookup(name: 'Users'),
       customer_id: 2,
@@ -736,5 +736,136 @@ class ObjectManagerTest < ActiveSupport::TestCase
     assert_equal(ticket_count, 1)
     assert_equal(tickets[0].id, ticket1.id)
 
+    agent1 = User.create_or_update(
+      login: 'agent1@example.com',
+      firstname: 'Notification',
+      lastname: 'Agent1',
+      email: 'agent1@example.com',
+      password: 'agentpw',
+      active: true,
+      roles: Role.where(name: 'Agent'),
+      groups: Group.all,
+      updated_by_id: 1,
+      created_by_id: 1,
+    )
+
+    overview1 = Overview.create!(
+      name: 'Overview1',
+      link: 'my_overview',
+      roles: Role.all,
+      condition: {
+        'ticket.1_a_anfrage_status' => {
+          operator: 'is',
+          value: 'some attribute text',
+        },
+      },
+      order: {
+        by: '1_a_anfrage_status',
+        direction: 'DESC',
+      },
+      group_by: '1_a_anfrage_status',
+      view: {
+        d: %w[title customer state created_at],
+        s: %w[number title customer state created_at],
+        m: %w[number title customer state created_at],
+        view_mode_default: 's',
+      },
+      prio: 1,
+      updated_by_id: 1,
+      created_by_id: 1,
+    )
+
+    result = Ticket::Overviews.index(agent1)
+
+    overview = nil
+    result.each do |local_overview|
+      next if local_overview[:overview][:name] != 'Overview1'
+      overview = local_overview
+      break
+    end
+    assert(overview)
+
+    assert_equal(1, overview[:tickets].count)
+    assert_equal(1, overview[:count])
+    assert_equal(ticket1.id, overview[:tickets][0][:id])
   end
+
+  test 'd object manager attribute - update attribute type' do
+
+    attribute1 = ObjectManager::Attribute.add(
+      object: 'Ticket',
+      name: 'example_1',
+      display: 'example_1',
+      data_type: 'input',
+      data_option: {
+        default: '',
+        maxlength: 200,
+        type: 'text',
+        null: true,
+        options: {},
+      },
+      active: true,
+      screens: {},
+      position: 20,
+      created_by_id: 1,
+      updated_by_id: 1,
+    )
+
+    assert_equal(true, ObjectManager::Attribute.pending_migration?)
+    assert_equal(1, ObjectManager::Attribute.migrations.count)
+
+    assert(ObjectManager::Attribute.migration_execute)
+
+    assert_raises(RuntimeError) do
+      ObjectManager::Attribute.add(
+        object: 'Ticket',
+        name: 'example_1',
+        display: 'example_1',
+        data_type: 'boolean',
+        data_option: {
+          default: true,
+          options: {
+            true: 'Yes',
+            false: 'No',
+          },
+          null: false,
+        },
+        active: true,
+        screens: {},
+        position: 200,
+        created_by_id: 1,
+        updated_by_id: 1,
+      )
+    end
+
+    attribute2 = ObjectManager::Attribute.add(
+      object: 'Ticket',
+      name: 'example_1',
+      display: 'example_1',
+      data_type: 'select',
+      data_option: {
+        default: '',
+        maxlength: 200,
+        type: 'text',
+        null: true,
+        options: {
+          aa: 'aa',
+          bb: 'bb',
+        },
+      },
+      active: true,
+      screens: {},
+      position: 20,
+      created_by_id: 1,
+      updated_by_id: 1,
+    )
+
+    assert_equal(attribute1.id, attribute2.id)
+    assert_equal(true, ObjectManager::Attribute.pending_migration?)
+    assert_equal(1, ObjectManager::Attribute.migrations.count)
+
+    assert(ObjectManager::Attribute.migration_execute)
+
+  end
+
 end

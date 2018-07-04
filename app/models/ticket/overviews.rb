@@ -47,6 +47,8 @@ returns
   {
     overview: {
       id: 123,
+      name: 'some name',
+      view: 'some_view',
       updated_at: ...,
     },
     count: 3,
@@ -99,7 +101,7 @@ returns
                      'created_at'
                    end
       end
-      order_by = "tickets.#{order_by}"
+      order_by = "#{ActiveRecord::Base.connection.quote_table_name('tickets')}.#{ActiveRecord::Base.connection.quote_column_name(order_by)}"
 
       # check if group by exists
       if overview.group_by.present?
@@ -110,7 +112,7 @@ returns
                      end
         end
         if group_by
-          order_by = "tickets.#{group_by}, #{order_by}"
+          order_by = "#{ActiveRecord::Base.connection.quote_table_name('tickets')}.#{ActiveRecord::Base.connection.quote_column_name(group_by)}, #{order_by}"
         end
       end
 
