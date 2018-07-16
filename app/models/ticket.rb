@@ -610,20 +610,20 @@ condition example
       elsif selector['operator'] == 'is not'
         if selector['pre_condition'] == 'not_set'
           if attributes[1].match?(/^(created_by|updated_by|owner|customer|user)_id/)
-            query += "#{attribute} NOT IN (?)"
+            query += "(#{attribute} IS NULL OR #{attribute} NOT IN (?))"
             bind_params.push 1
           else
             query += "#{attribute} IS NOT NULL"
           end
         elsif selector['pre_condition'] == 'current_user.id'
-          query += "#{attribute} NOT IN (?)"
+          query += "(#{attribute} IS NULL OR #{attribute} NOT IN (?))"
           if attributes[1] == 'out_of_office_replacement_id'
             bind_params.push User.find(current_user_id).out_of_office_agent_of.pluck(:id)
           else
             bind_params.push current_user_id
           end
         elsif selector['pre_condition'] == 'current_user.organization_id'
-          query += "#{attribute} NOT IN (?)"
+          query += "(#{attribute} IS NULL OR #{attribute} NOT IN (?))"
           user = User.find_by(id: current_user_id)
           bind_params.push user.organization_id
         else
@@ -631,7 +631,7 @@ condition example
           if selector['value'].nil?
             query += "#{attribute} IS NOT NULL"
           else
-            query += "#{attribute} NOT IN (?)"
+            query += "(#{attribute} IS NULL OR #{attribute} NOT IN (?))"
             if attributes[1] == 'out_of_office_replacement_id'
               bind_params.push User.find(selector['value']).out_of_office_agent_of.pluck(:id)
             else
@@ -824,18 +824,15 @@ perform changes on ticket
       end
     end
 
+    perform_notification = {}
     changed = false
     perform.each do |key, value|
       (object_name, attribute) = key.split('.', 2)
       raise "Unable to update object #{object_name}.#{attribute}, only can update tickets and send notifications!" if object_name != 'ticket' && object_name != 'notification'
 
-      # send notification
-      case key
-      when 'notification.sms'
-        send_sms_notification(value, article, perform_origin)
-        next
-      when 'notification.email'
-        send_email_notification(value, article, perform_origin)
+      # send notification (after changes are done)
+      if object_name == 'notification'
+        perform_notification[key] = value
         next
       end
 
@@ -880,10 +877,24 @@ perform changes on ticket
       changed = true
 
       self[attribute] = value['value']
-      logger.debug { "set #{object_name}.#{attribute} = #{value['value'].inspect}" }
+      logger.debug { "set #{object_name}.#{attribute} = #{value['value'].inspect} for ticket_id #{id}" }
     end
-    return if !changed
-    save
+
+    if changed
+      save!
+    end
+
+    perform_notification.each do |key, value|
+
+      # send notification
+      case key
+      when 'notification.sms'
+        send_sms_notification(value, article, perform_origin)
+        next
+      when 'notification.email'
+        send_email_notification(value, article, perform_origin)
+      end
+    end
 
     true
   end
@@ -935,6 +946,8 @@ perform active triggers on ticket
 
     Transaction.execute(local_options) do
       triggers.each do |trigger|
+        logger.debug { "Probe trigger (#{trigger.name}/#{trigger.id}) for this object (Ticket:#{ticket.id}/Loop:#{local_options[:loop_count]})" }
+
         condition = trigger.condition
 
         # check if one article attribute is used
@@ -1234,18 +1247,18 @@ result
           elsif article.from.present?
             recipients_raw.push(article.from)
           elsif article.origin_by_id
-            email = User.lookup(id: article.origin_by_id).email
+            email = User.find_by(id: article.origin_by_id).email
             recipients_raw.push(email)
           elsif article.created_by_id
-            email = User.lookup(id: article.created_by_id).email
+            email = User.find_by(id: article.created_by_id).email
             recipients_raw.push(email)
           end
         end
       elsif recipient == 'ticket_customer'
-        email = User.lookup(id: customer_id).email
+        email = User.find_by(id: customer_id).email
         recipients_raw.push(email)
       elsif recipient == 'ticket_owner'
-        email = User.lookup(id: owner_id).email
+        email = User.find_by(id: owner_id).email
         recipients_raw.push(email)
       elsif recipient == 'ticket_agents'
         User.group_access(group_id, 'full').sort_by(&:login).each do |user|
@@ -1360,9 +1373,9 @@ result
     return if recipients_checked.blank?
     recipient_string = recipients_checked.join(', ')
 
-    group = self.group
-    return if !group
-    email_address = group.email_address
+    group_id = self.group_id
+    return if !group_id
+    email_address = Group.find(group_id).email_address
     if !email_address
       logger.info "Unable to send trigger based notification to #{recipient_string} because no email address is set for group '#{group.name}'"
       return
