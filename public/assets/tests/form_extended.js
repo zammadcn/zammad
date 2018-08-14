@@ -564,7 +564,7 @@ test('form checks', function() {
   el.find('.js-attributeSelector').last().find('select').val('notification.email').trigger('change')
   el.find('[name="executions::notification.email::subject"]').val('some subject')
   el.find('[data-name="executions::notification.email::body"]').html('lala')
-  el.find('[data-name="executions::notification.email::recipient"] .js-option[data-value="ticket_owner"]').click()
+  el.find('[data-name="executions::notification.email::recipient"] .js-select.js-option[data-value="ticket_owner"]').click()
 
   var params = App.ControllerForm.params(el)
   var test_params = {
@@ -666,4 +666,49 @@ test('form checks', function() {
   }
   deepEqual(params, test_params, 'form param check')
 
+  $('#forms').append('<hr><h1>form 5</h1><form id="form5"></form>')
+  var el = $('#form5')
+  var defaults = {
+    condition: {
+      'article.body': {
+        operator: 'contains',
+        value: 'some body',
+      },
+    },
+    executions: {
+      'notification.email': {
+        recipient: 'ticket_customer',
+        subject: 'some subject',
+        body: "some<br>\nbody",
+      },
+    },
+  } 
+  new App.ControllerForm({
+    el:        el,
+    model:     {
+      configure_attributes: [
+        { name: 'condition',  display: 'Conditions', tag: 'ticket_selector', null: true },
+        { name: 'executions', display: 'Executions', tag: 'ticket_perform_action', null: true, notification: true },
+      ]
+    },
+    params: defaults,
+    autofocus: true
+  })
+  var params = App.ControllerForm.params(el)
+  var test_params = {
+    condition: {
+      'article.body': {
+        operator: 'contains',
+        value: 'some body',
+      },
+    },
+    executions: {
+      'notification.email': {
+        recipient: 'ticket_customer',
+        subject: 'some subject',
+        body: "some<br>\nbody",
+      },
+    },
+  }
+  deepEqual(params, test_params, 'form article body param check')
 });

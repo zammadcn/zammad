@@ -123,8 +123,11 @@ gem 'viewpoint'
 group :development, :test do
 
   # debugging
+  gem 'byebug'
   gem 'pry-rails'
   gem 'pry-remote'
+  gem 'pry-rescue'
+  gem 'pry-stack_explorer'
 
   # test frameworks
   gem 'rspec-rails'
@@ -144,7 +147,7 @@ group :development, :test do
   # livereload on template changes (html, js, css)
   gem 'guard',             require: false
   gem 'guard-livereload',  require: false
-  gem 'rack-livereload'
+  gem 'rack-livereload',   require: false
   gem 'rb-fsevent',        require: false
 
   # auto symlinking
@@ -157,9 +160,6 @@ group :development, :test do
 
   # changelog generation
   gem 'github_changelog_generator'
-
-  # Setting ENV for testing purposes
-  gem 'figaro'
 
   # Use Factory Bot for generating random test data
   gem 'factory_bot_rails'
@@ -174,4 +174,5 @@ end
 #               without having your changes overwritten during upgrades.)
 # ZAMMAD DEVS:  Consult the internal wiki
 #               (or else risk pushing unwanted changes to Gemfile.lock!)
+#               https://git.znuny.com/zammad/zammad/wikis/Tips#user-content-customizing-the-gemfile
 eval_gemfile 'Gemfile.local' if File.exist?('Gemfile.local')

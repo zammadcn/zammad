@@ -1,6 +1,6 @@
 FactoryBot.define do
   factory :trigger do
-    name          { "Test trigger #{rand(2**16)}" } # prevent unique name conflicts
+    sequence(:name) { |n| "Test trigger #{n}"  }
     condition     { { 'ticket.state_id' => { 'operator' => 'is not', 'value' => 4 } } }
     perform       { { 'ticket.state_id' => { 'value' => 4 } } }
     active        true

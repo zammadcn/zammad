@@ -12,7 +12,7 @@ class TicketsControllerTest < ActionDispatch::IntegrationTest
     groups = Group.all
 
     UserInfo.current_user_id = 1
-    @admin = User.create_or_update(
+    @admin = User.create!(
       login: 'tickets-admin',
       firstname: 'Tickets',
       lastname: 'Admin',
@@ -25,7 +25,7 @@ class TicketsControllerTest < ActionDispatch::IntegrationTest
 
     # create agent
     roles = Role.where(name: 'Agent')
-    @agent = User.create_or_update(
+    @agent = User.create!(
       login: 'tickets-agent@example.com',
       firstname: 'Tickets',
       lastname: 'Agent',
@@ -38,7 +38,7 @@ class TicketsControllerTest < ActionDispatch::IntegrationTest
 
     # create customer without org
     roles = Role.where(name: 'Customer')
-    @customer_without_org = User.create_or_update(
+    @customer_without_org = User.create!(
       login: 'tickets-customer1@example.com',
       firstname: 'Tickets',
       lastname: 'Customer1',
@@ -551,7 +551,7 @@ class TicketsControllerTest < ActionDispatch::IntegrationTest
     assert_not(file.preferences['Content-ID'])
   end
 
-  test '01.15 ticket create with agent - minimal article and attachment missing mine-type with customer' do
+  test '01.15 ticket create with agent - minimal article and simple invalid base64 attachment with customer' do
     credentials = ActionController::HttpAuthentication::Basic.encode_credentials('tickets-agent@example.com', 'agentpw')
     params = {
       title: 'a new ticket #15',
@@ -572,6 +572,83 @@ class TicketsControllerTest < ActionDispatch::IntegrationTest
     result = JSON.parse(@response.body)
     assert_equal(Hash, result.class)
     assert_equal('Invalid base64 for attachment with index \'0\'', result['error'])
+  end
+
+  test '01.15a ticket create with agent - minimal article and large invalid base64 attachment with customer' do
+    credentials = ActionController::HttpAuthentication::Basic.encode_credentials('tickets-agent@example.com', 'agentpw')
+    params = {
+      title: 'a new ticket #15a',
+      group: 'Users',
+      customer_id: @customer_without_org.id,
+      article: {
+        subject: 'some test 123',
+        body: 'some test 123',
+        attachments: [
+          'filename' => 'some_file.txt',
+          'data' => "LARGE_INVALID_BASE64_#{'#' * 20_000_000}",
+          'mime-type' => 'text/plain',
+        ],
+      },
+    }
+    post '/api/v1/tickets', params: params.to_json, headers: @headers.merge('Authorization' => credentials)
+    assert_response(422)
+    result = JSON.parse(@response.body)
+    assert_equal(Hash, result.class)
+    assert_equal('Invalid base64 for attachment with index \'0\'', result['error'])
+  end
+
+  test '01.15b ticket create with agent - minimal article and valid multiline base64 with linebreaks attachment with customer' do
+    credentials = ActionController::HttpAuthentication::Basic.encode_credentials('tickets-agent@example.com', 'agentpw')
+    params = {
+      title: 'a new ticket #15b',
+      group: 'Users',
+      customer_id: @customer_without_org.id,
+      article: {
+        subject: 'some test 123',
+        body: 'some test 123',
+        attachments: [
+          'filename' => 'some_file.txt',
+          'data' =>  Base64.encode64('a' * 1_000),
+          'mime-type' => 'text/plain',
+        ],
+      },
+    }
+    post '/api/v1/tickets', params: params.to_json, headers: @headers.merge('Authorization' => credentials)
+    assert_response(201)
+    result = JSON.parse(@response.body)
+    assert_equal('a new ticket #15b', result['title'])
+    ticket = Ticket.find(result['id'])
+    assert_equal(1, ticket.articles.count)
+    assert_equal(1, ticket.articles.first.attachments.count)
+    file = ticket.articles.first.attachments.first
+    assert_equal('a' * 1_000, file.content)
+  end
+
+  test '01.15c ticket create with agent - minimal article and valid multiline base64 without linebreaks attachment with customer' do
+    credentials = ActionController::HttpAuthentication::Basic.encode_credentials('tickets-agent@example.com', 'agentpw')
+    params = {
+      title: 'a new ticket #15c',
+      group: 'Users',
+      customer_id: @customer_without_org.id,
+      article: {
+        subject: 'some test 123',
+        body: 'some test 123',
+        attachments: [
+          'filename' => 'some_file.txt',
+          'data' =>  Base64.strict_encode64('a' * 1_000),
+          'mime-type' => 'text/plain',
+        ],
+      },
+    }
+    post '/api/v1/tickets', params: params.to_json, headers: @headers.merge('Authorization' => credentials)
+    assert_response(201)
+    result = JSON.parse(@response.body)
+    assert_equal('a new ticket #15c', result['title'])
+    ticket = Ticket.find(result['id'])
+    assert_equal(1, ticket.articles.count)
+    assert_equal(1, ticket.articles.first.attachments.count)
+    file = ticket.articles.first.attachments.first
+    assert_equal('a' * 1_000, file.content)
   end
 
   test '01.16 ticket create with agent - minimal article and attachment invalid base64 with customer' do
@@ -719,7 +796,7 @@ AAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO
   end
 
   test '02.03 ticket with wrong ticket id' do
-    group = Group.create_or_update(
+    group = Group.create!(
       name: "GroupWithoutPermission-#{rand(9_999_999_999)}",
       active: true,
       updated_by_id: 1,
@@ -767,6 +844,9 @@ AAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO
       priority: Ticket::Priority.lookup(name: '2 normal'),
       updated_by_id: 1,
       created_by_id: 1,
+      preferences: {
+        some_key1: 123,
+      },
     )
     credentials = ActionController::HttpAuthentication::Basic.encode_credentials('tickets-agent@example.com', 'agentpw')
     get "/api/v1/tickets/#{ticket.id}", params: {}, headers: @headers.merge('Authorization' => credentials)
@@ -778,10 +858,14 @@ AAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO
     assert_equal(ticket.customer_id, result['customer_id'])
     assert_equal(1, result['updated_by_id'])
     assert_equal(1, result['created_by_id'])
+    assert_equal(123, result['preferences']['some_key1'])
 
     params = {
       title: "#{title} - 2",
       customer_id: @agent.id,
+      preferences: {
+        some_key2: 'abc',
+      },
     }
     put "/api/v1/tickets/#{ticket.id}", params: params.to_json, headers: @headers.merge('Authorization' => credentials)
     assert_response(200)
@@ -792,6 +876,8 @@ AAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO
     assert_equal(@agent.id, result['customer_id'])
     assert_equal(@agent.id, result['updated_by_id'])
     assert_equal(1, result['created_by_id'])
+    assert_equal(123, result['preferences']['some_key1'])
+    assert_equal('abc', result['preferences']['some_key2'])
 
     params = {
       ticket_id: ticket.id,
@@ -1952,7 +2038,7 @@ AAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO
   end
 
   test '06.01 - ticket with follow up possible set to new_ticket' do
-    group = Group.create_or_update(
+    group = Group.create!(
       name: "GroupWithNoFollowUp-#{rand(9_999_999_999)}",
       active: true,
       updated_by_id: 1,
@@ -2024,7 +2110,7 @@ AAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO
   end
 
   test '07.01 ticket merge' do
-    group_no_permission = Group.create_or_update(
+    group_no_permission = Group.create!(
       name: 'GroupWithNoPermission',
       active: true,
       updated_by_id: 1,
@@ -2089,7 +2175,7 @@ AAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO
   end
 
   test '07.02 ticket merge - change permission' do
-    group_change_permission = Group.create_or_update(
+    group_change_permission = Group.create!(
       name: 'GroupWithChangePermission',
       active: true,
       updated_by_id: 1,
@@ -2124,6 +2210,97 @@ AAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO
     assert_equal(Hash, result.class)
     assert_equal('success', result['result'])
     assert_equal(ticket2.id, result['master_ticket']['id'])
+  end
+
+  test '08.01 ticket search sorted' do
+    title = "ticket pagination #{rand(999_999_999)}"
+    tickets = []
+
+    ticket1 = Ticket.create!(
+      title: "#{title} A",
+      group: Group.lookup(name: 'Users'),
+      customer_id: @customer_without_org.id,
+      state: Ticket::State.lookup(name: 'new'),
+      priority: Ticket::Priority.lookup(name: '2 normal'),
+      created_at: '2018-02-05 17:42:00',
+      updated_at: '2018-02-05 20:42:00',
+      updated_by_id: 1,
+      created_by_id: 1,
+    )
+    Ticket::Article.create!(
+      type: Ticket::Article::Type.lookup(name: 'note'),
+      sender: Ticket::Article::Sender.lookup(name: 'Customer'),
+      from: 'sender',
+      subject: 'subject',
+      body: 'some body',
+      ticket_id: ticket1.id,
+      updated_by_id: 1,
+      created_by_id: 1,
+    )
+
+    ticket2 = Ticket.create!(
+      title: "#{title} B",
+      group: Group.lookup(name: 'Users'),
+      customer_id: @customer_without_org.id,
+      state: Ticket::State.lookup(name: 'new'),
+      priority: Ticket::Priority.lookup(name: '3 hoch'),
+      created_at: '2018-02-05 19:42:00',
+      updated_at: '2018-02-05 19:42:00',
+      updated_by_id: 1,
+      created_by_id: 1,
+    )
+    Ticket::Article.create!(
+      type: Ticket::Article::Type.lookup(name: 'note'),
+      sender: Ticket::Article::Sender.lookup(name: 'Customer'),
+      from: 'sender',
+      subject: 'subject',
+      body: 'some body',
+      ticket_id: ticket2.id,
+      updated_by_id: 1,
+      created_by_id: 1,
+    )
+
+    credentials = ActionController::HttpAuthentication::Basic.encode_credentials('tickets-admin', 'adminpw')
+    get "/api/v1/tickets/search?query=#{CGI.escape(title)}&limit=40", params: {}, headers: @headers.merge('Authorization' => credentials)
+    assert_response(200)
+    result = JSON.parse(@response.body)
+    assert_equal(Hash, result.class)
+    assert_equal([ticket1.id, ticket2.id], result['tickets'])
+
+    credentials = ActionController::HttpAuthentication::Basic.encode_credentials('tickets-admin', 'adminpw')
+    get "/api/v1/tickets/search?query=#{CGI.escape(title)}&limit=40", params: { sort_by: 'created_at', order_by: 'asc' }, headers: @headers.merge('Authorization' => credentials)
+    assert_response(200)
+    result = JSON.parse(@response.body)
+    assert_equal(Hash, result.class)
+    assert_equal([ticket1.id, ticket2.id], result['tickets'])
+
+    credentials = ActionController::HttpAuthentication::Basic.encode_credentials('tickets-admin', 'adminpw')
+    get "/api/v1/tickets/search?query=#{CGI.escape(title)}&limit=40", params: { sort_by: 'title', order_by: 'asc' }, headers: @headers.merge('Authorization' => credentials)
+    assert_response(200)
+    result = JSON.parse(@response.body)
+    assert_equal(Hash, result.class)
+    assert_equal([ticket1.id, ticket2.id], result['tickets'])
+
+    credentials = ActionController::HttpAuthentication::Basic.encode_credentials('tickets-admin', 'adminpw')
+    get "/api/v1/tickets/search?query=#{CGI.escape(title)}&limit=40", params: { sort_by: 'title', order_by: 'desc' }, headers: @headers.merge('Authorization' => credentials)
+    assert_response(200)
+    result = JSON.parse(@response.body)
+    assert_equal(Hash, result.class)
+    assert_equal([ticket2.id, ticket1.id], result['tickets'])
+
+    credentials = ActionController::HttpAuthentication::Basic.encode_credentials('tickets-admin', 'adminpw')
+    get "/api/v1/tickets/search?query=#{CGI.escape(title)}&limit=40", params: { sort_by: %w[created_at updated_at], order_by: %w[asc asc] }, headers: @headers.merge('Authorization' => credentials)
+    assert_response(200)
+    result = JSON.parse(@response.body)
+    assert_equal(Hash, result.class)
+    assert_equal([ticket1.id, ticket2.id], result['tickets'])
+
+    credentials = ActionController::HttpAuthentication::Basic.encode_credentials('tickets-admin', 'adminpw')
+    get "/api/v1/tickets/search?query=#{CGI.escape(title)}&limit=40", params: { sort_by: %w[created_at updated_at], order_by: %w[desc asc]  }, headers: @headers.merge('Authorization' => credentials)
+    assert_response(200)
+    result = JSON.parse(@response.body)
+    assert_equal(Hash, result.class)
+    assert_equal([ticket2.id, ticket1.id], result['tickets'])
   end
 
 end

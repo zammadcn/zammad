@@ -240,12 +240,13 @@ test:integration:es_mysql:
     - export ES_URL="http://localhost:9200"
     - rake db:create
     - rake db:migrate
+    - ruby -I test/ test/integration/elasticsearch_active_test.rb
     - ruby -I test/ test/integration/elasticsearch_test.rb
     - ruby -I test/ test/controllers/search_controller_test.rb
     - ruby -I test/ test/integration/report_test.rb
     - ruby -I test/ test/controllers/form_controller_test.rb
-    - ruby -I test/ test/controllers/user_controller_test.rb
-    - ruby -I test/ test/controllers/organization_controller_test.rb
+    - ruby -I test/ test/controllers/users_controller_test.rb
+    - ruby -I test/ test/controllers/organizations_controller_test.rb
     - rake db:drop
 
 test:integration:es_postgresql:
@@ -259,12 +260,13 @@ test:integration:es_postgresql:
     - export ES_URL="http://localhost:9200"
     - rake db:create
     - rake db:migrate
+    - ruby -I test/ test/integration/elasticsearch_active_test.rb
     - ruby -I test/ test/integration/elasticsearch_test.rb
     - ruby -I test/ test/controllers/search_controller_test.rb
     - ruby -I test/ test/integration/report_test.rb
     - ruby -I test/ test/controllers/form_controller_test.rb
-    - ruby -I test/ test/controllers/user_controller_test.rb
-    - ruby -I test/ test/controllers/organization_controller_test.rb
+    - ruby -I test/ test/controllers/users_controller_test.rb
+    - ruby -I test/ test/controllers/organizations_controller_test.rb
     - rake db:drop
 
 test:integration:zendesk_mysql:
@@ -300,7 +302,7 @@ test:integration:otrs_6_mysql:
     - mysql
   script:
     - export RAILS_ENV=test
-    - export IMPORT_OTRS_ENDPOINT="http://vz1185.test.znuny.com/otrs/public.pl?Action=ZammadMigrator"
+    - export IMPORT_OTRS_ENDPOINT="https://vz1185.test.znuny.com/otrs/public.pl?Action=ZammadMigrator"
     - rake db:create
     - rake db:migrate
     - ruby -I test/ test/integration/otrs_import_test.rb
@@ -313,7 +315,7 @@ test:integration:otrs_6_postgresql:
     - postgresql
   script:
     - export RAILS_ENV=test
-    - export IMPORT_OTRS_ENDPOINT="http://vz1185.test.znuny.com/otrs/public.pl?Action=ZammadMigrator"
+    - export IMPORT_OTRS_ENDPOINT="https://vz1185.test.znuny.com/otrs/public.pl?Action=ZammadMigrator"
     - rake db:create
     - rake db:migrate
     - ruby -I test/ test/integration/otrs_import_test.rb
@@ -1052,4 +1054,19 @@ test:browser:integration:zendesk_chrome:
     - RAILS_ENV=test rake db:create
     - script/build/test_startup.sh $RAILS_ENV $BROWSER_PORT $WS_PORT 1
     - ruby -I test/ test/integration/zendesk_import_browser_test.rb || script/build/test_shutdown.sh $RAILS_ENV $BROWSER_PORT $WS_PORT 1 1
+    - script/build/test_shutdown.sh $RAILS_ENV $BROWSER_PORT $WS_PORT 0 1
+
+test:browser:integration:idoit_chrome:
+  stage: browser-integration
+  dependencies:
+    - browser:build
+  tags:
+    - browser
+  script:
+    - export BROWSER=chrome
+    - export BROWSER_URL=http://$IP:$BROWSER_PORT
+    - RAILS_ENV=test rake db:create
+    - cp contrib/auto_wizard_test.json auto_wizard.json
+    - script/build/test_startup.sh $RAILS_ENV $BROWSER_PORT $WS_PORT 1
+    - ruby -I test/ test/integration/idoit_browser_test.rb || script/build/test_shutdown.sh $RAILS_ENV $BROWSER_PORT $WS_PORT 1 1
     - script/build/test_shutdown.sh $RAILS_ENV $BROWSER_PORT $WS_PORT 0 1

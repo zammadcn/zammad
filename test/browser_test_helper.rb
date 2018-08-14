@@ -51,7 +51,19 @@ class TestCase < Test::Unit::TestCase
   def browser_instance
     @browsers ||= {}
     if ENV['REMOTE_URL'].blank?
-      local_browser = Selenium::WebDriver.for(browser.to_sym, profile: profile)
+      params = {
+        profile: profile,
+      }
+      if ENV['BROWSER_HEADLESS'].present?
+        if browser == 'firefox'
+          params[:options] = Selenium::WebDriver::Firefox::Options.new
+          params[:options].add_argument('-headless')
+        elsif browser == 'chrome'
+          params[:options] = Selenium::WebDriver::Chrome::Options.new
+          params[:options].add_argument('-headless')
+        end
+      end
+      local_browser = Selenium::WebDriver.for(browser.to_sym, params)
       @browsers[local_browser.hash] = local_browser
       browser_instance_preferences(local_browser)
       return local_browser
@@ -125,7 +137,7 @@ class TestCase < Test::Unit::TestCase
     end
   end
 
-  def screenshot(params)
+  def screenshot(params = {})
     instance = params[:browser] || @browser
     comment = params[:comment] || ''
     filename = "tmp/#{Time.zone.now.strftime('screenshot_%Y_%m_%d__%H_%M_%S_%L')}_#{comment}#{instance.hash}.png"
@@ -393,16 +405,23 @@ class TestCase < Test::Unit::TestCase
 
   click(
     browser: browser1,
-    css:  '.some_class',
-    fast: false, # do not wait
-    wait: 1, # wait 1 sec.
+    css:     '.some_class',
+    fast:    false, # do not wait
+    wait:    1, # wait 1 sec.
   )
 
   click(
     browser: browser1,
-    text: '.partial_link_text',
-    fast: false, # do not wait
-    wait: 1, # wait 1 sec.
+    xpath:   '//a[contains(@class,".text-1")]',
+    fast:    false, # do not wait
+    wait:    1, # wait 1 sec.
+  )
+
+  click(
+    browser: browser1,
+    text:    '.partial_link_text',
+    fast:    false, # do not wait
+    wait:    1, # wait 1 sec.
   )
 
 =end
@@ -413,10 +432,13 @@ class TestCase < Test::Unit::TestCase
 
     instance = params[:browser] || @browser
     if params.include?(:css)
-      param_key = :css
+      param_key        = :css
       find_element_key = :css
+    elsif params.include?(:xpath)
+      param_key        = :xpath
+      find_element_key = :xpath
     else
-      param_key = :text
+      param_key        = :text
       find_element_key = :partial_link_text
       sleep 0.5
     end
@@ -448,6 +470,36 @@ class TestCase < Test::Unit::TestCase
 
     sleep 0.2 if !params[:fast]
     sleep params[:wait] if params[:wait]
+  end
+
+=begin
+
+  perform_macro('Close & Tag as Spam')
+
+  # or
+
+  perform_macro(
+    name:    'Close & Tag as Spam',
+    browser: browser1,
+  )
+
+=end
+
+  def perform_macro(params)
+    switch_window_focus(params)
+    log('perform_macro', params)
+
+    instance = params[:browser] || @browser
+
+    click(
+      browser: instance,
+      css:     '.active.content .js-submitDropdown .js-openDropdownMacro'
+    )
+
+    click(
+      browser: instance,
+      xpath:   "//div[contains(@class, 'content') and contains(@class, 'active')]//li[contains(@class, 'js-dropdownActionMacro') and contains(text(), '#{params[:name]}')]"
+    )
   end
 
 =begin
@@ -512,7 +564,12 @@ class TestCase < Test::Unit::TestCase
     log('modal_ready', params)
 
     instance = params[:browser] || @browser
-    sleep 3
+
+    watch_for(
+      browser: instance,
+      css:     '.modal.in',
+      timeout: params[:timeout] || 4,
+    )
   end
 
 =begin
@@ -981,6 +1038,40 @@ class TestCase < Test::Unit::TestCase
 
 =begin
 
+Get the on-screen pixel coordinates of a given DOM element. Can be used to compare
+the relative location of table rows before and after sort, for example.
+
+Returns a Selenium::WebDriver::Point object. Use result.x and result.y to access
+its X and Y coordinates respectively.
+
+      get_location(
+        browser: browser1,
+        css: '.some_class',
+      )
+
+=end
+
+  def get_location(params)
+    switch_window_focus(params)
+    log('exists', params)
+
+    instance = params[:browser] || @browser
+    if params[:css]
+      query = { css: params[:css] }
+    end
+    if params[:xpath]
+      query = { xpath: params[:xpath] }
+    end
+    if !instance.find_elements(query)[0]
+      screenshot(browser: instance, comment: 'exists_failed')
+      raise "#{query} dosn't exist, but should"
+    end
+
+    instance.find_elements(query)[0].location
+  end
+
+=begin
+
 set type of task (closeTab, closeNextInOverview, stayOnTab)
 
   task_type(
@@ -1229,7 +1320,7 @@ set type of task (closeTab, closeNextInOverview, stayOnTab)
   file_upload(
     browser: browser1,
     css:     '.content.active .attachmentPlaceholder-inputHolder input'
-    files:   ['path/in/home/some_file.ext'], # 'test/fixtures/test1.pdf'
+    files:   ['path/in/home/some_file.ext'], # 'test/data/pdf/test1.pdf'
   )
 
 =end
@@ -1243,6 +1334,7 @@ set type of task (closeTab, closeNextInOverview, stayOnTab)
     params[:files].each do |file|
       instance.find_elements(css: params[:css])[0].send_keys(Rails.root.join(file))
     end
+    return if params[:no_sleep]
     sleep 2 * params[:files].count
   end
 
@@ -1252,7 +1344,7 @@ set type of task (closeTab, closeNextInOverview, stayOnTab)
     browser:   browser1,
     container: element # optional, defaults to browser, must exist at the time of dispatch
     css:       '#content .text-1', # xpath or css required
-    xpath:       '/content[contains(@class,".text-1")]', # xpath or css required
+    xpath:     '/content[contains(@class,".text-1")]', # xpath or css required
     value:     'some text',
     attribute: 'some_attribute' # optional
     timeout:   16, # in sec, default 16
@@ -1698,6 +1790,15 @@ wait untill text in selector disabppears
       )
     end
 
+    if data[:group_direction]
+      select(
+        browser:  instance,
+        css:      '.modal select[name="group_direction"]',
+        value:    data[:group_direction],
+        mute_log: true,
+      )
+    end
+
     instance.find_elements(css: '.modal button.js-submit')[0].click
     modal_disappear(browser: instance)
     11.times do
@@ -1798,6 +1899,15 @@ wait untill text in selector disabppears
         browser:  instance,
         css:      '.modal select[name="order::direction"]',
         value:    data['order::direction'],
+        mute_log: true,
+      )
+    end
+
+    if data[:group_direction]
+      select(
+        browser:  instance,
+        css:      '.modal select[name="group_direction"]',
+        value:    data[:group_direction],
         mute_log: true,
       )
     end
@@ -1922,7 +2032,7 @@ wait untill text in selector disabppears
         assert_equal(3, count, 'check if owner selection is - selection + master + agent per default')
       else
 
-        # check count of agents, should be only 1 / - selection on init screen
+        # check count of agents, should be only 1 selection, the "-" selection on init screen
         if !params[:disable_group_check]
           count = instance.find_elements(css: '.content.active .newTicket select[name="owner_id"] option').count
           if count != 1
@@ -2406,6 +2516,53 @@ wait untill text in selector disabppears
 
 =begin
 
+  overview_open(
+    browser: browser2,
+    name:    overview_name,
+  )
+
+  overview_open(
+    browser: browser2,
+    link:    "#ticket/view/some_special_name",
+  )
+
+=end
+
+  def overview_open(params)
+    switch_window_focus(params)
+    log('overview_open', params)
+
+    instance = params[:browser] || @browser
+
+    # click on overview task in sidebar
+    instance.find_elements(css: '.js-overviewsMenuItem')[0].click
+
+    # show larger overview selection list
+    sleep 0.5
+    execute(
+      browser: instance,
+      js: '$(".content.active .sidebar").css("display", "block")',
+    )
+
+    link = if params[:link]
+             params[:link]
+           elsif params[:name]
+             "\#ticket/view/#{params[:name]}"
+           end
+
+    # switch to overview
+    instance.find_elements(css: ".content.active .sidebar a[href=\"#{link}\"]")[0].click
+
+    # hide larger overview selection list again
+    sleep 0.5
+    execute(
+      browser: instance,
+      js: '$(".content.active .sidebar").css("display", "none")',
+    )
+  end
+
+=begin
+
   ticket_open_by_overview(
     browser: browser2,
     number:  ticket1[:number],
@@ -2427,18 +2584,8 @@ wait untill text in selector disabppears
 
     instance = params[:browser] || @browser
 
-    instance.find_elements(css: '.js-overviewsMenuItem')[0].click
-    sleep 0.5
-    execute(
-      browser: instance,
-      js: '$(".content.active .sidebar").css("display", "block")',
-    )
-    instance.find_elements(css: ".content.active .sidebar a[href=\"#{params[:link]}\"]")[0].click
-    sleep 0.5
-    execute(
-      browser: instance,
-      js: '$(".content.active .sidebar").css("display", "none")',
-    )
+    overview_open(params)
+
     if params[:title]
       element = instance.find_element(css: '.content.active').find_element(partial_link_text: params[:title])
       if !element
@@ -2718,12 +2865,20 @@ wait untill text in selector disabppears
       element = instance.find_elements(css: '.modal input.searchableSelect-main')[0]
       element.clear
       element.send_keys(data[:organization])
-      target = nil
-      until target
-        sleep 0.5
-        target = instance.find_elements(css: ".modal li[title='#{data[:organization]}']")[0]
+
+      begin
+        retries ||= 0
+        target    = nil
+        until target
+          sleep 0.5
+          target = instance.find_elements(css: ".modal li[title='#{data[:organization]}']")[0]
+        end
+        target.click()
+      rescue Selenium::WebDriver::Error::StaleElementReferenceError
+        sleep retries
+        retries += 1
+        retry if retries < 3
       end
-      target.click()
     end
     check(
       browser: instance,
@@ -3140,6 +3295,101 @@ wait untill text in selector disabppears
     end
     screenshot(browser: instance, comment: 'group_create_failed')
     raise 'group creation failed'
+  end
+
+=begin
+
+  macro_create(
+    browser:         browser1,
+    name:            'Emmanuel Macro',
+    ux_flow_next_up: 'Stay on tab',    # possible: 'Stay on tab', 'Close tab', 'Advance to next ticket from overview'
+    actions: {
+      'Tags' => {                      # currently only 'Tags' is supported
+        operator: 'add',
+        value:    'spam',
+      }
+    }
+  )
+
+=end
+
+  def macro_create(params)
+    switch_window_focus(params)
+    log('macro_create', params)
+
+    instance = params[:browser] || @browser
+
+    click(
+      browser: instance,
+      css:     'a[href="#manage"]',
+      mute_log: true,
+    )
+
+    click(
+      browser: instance,
+      css:     '.sidebar a[href="#manage/macros"]',
+      mute_log: true,
+    )
+
+    click(
+      browser: instance,
+      css:     '.page-header-meta > a[data-type="new"]'
+    )
+
+    sendkey(
+      browser: instance,
+      css:     '.modal-body input[name="name"]',
+      value:   params[:name]
+    )
+
+    params[:actions]&.each do |attribute, changes|
+
+      select(
+        browser:  instance,
+        css:      '.modal .ticket_perform_action .js-filterElement .js-attributeSelector select',
+        value:    attribute,
+        mute_log: true,
+      )
+
+      next if attribute != 'Tags'
+
+      select(
+        browser:  instance,
+        css:      '.modal .ticket_perform_action .js-filterElement .js-operator select',
+        value:    changes[:operator],
+        mute_log: true,
+      )
+
+      sendkey(
+        browser:  instance,
+        css:      '.modal .ticket_perform_action .js-filterElement .js-value .token-input',
+        value:    changes[:value],
+        mute_log: true,
+      )
+      sendkey(
+        browser: instance,
+        value:   :enter,
+      )
+    end
+
+    select(
+      browser: instance,
+      css:     '.modal-body select[name="ux_flow_next_up"]',
+      value:   params[:ux_flow_next_up]
+    )
+
+    click(
+      browser: instance,
+      css:     '.modal-footer button[type="submit"]'
+    )
+
+    watch_for(
+      browser: instance,
+      css:     'body',
+      value:   params[:name],
+    )
+
+    assert(true, 'macro created')
   end
 
 =begin
