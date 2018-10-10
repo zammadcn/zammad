@@ -166,6 +166,10 @@ group :development, :test do
 
   # mock http calls
   gem 'webmock'
+
+  # record and replay TCP/HTTP transactions
+  gem 'tcr'
+  gem 'vcr'
 end
 
 # Want to extend Zammad with additional gems?

@@ -2818,6 +2818,22 @@ wait untill text in selector disabppears
       lastname:  'Manage Lastname' + random,
       email:     user_email,
       password:  'some-pass',
+      role:      'Admin',     # optional, choose among [Admin, Agent, Customer]
+                              # defaults to Customer if not provided
+    },
+  )
+
+  user_create(
+    browser: browser2,
+    data: {
+      #login:      'some login' + random,
+      firstname:   'Manage Firstname' + random,
+      lastname:    'Manage Lastname' + random,
+      email:       user_email,
+      password:    'some-pass',
+      role:        'Agent',     # when the role is Agent an array of permissions for each group is optionally accepted
+      permissions: { 1 => %w[read create overview],
+                       2 => ['full'], }
     },
   )
 
@@ -2888,11 +2904,46 @@ wait untill text in selector disabppears
         retry if retries < 3
       end
     end
-    check(
+
+    if data[:role]
+      if data[:role] == 'Admin'
+        check(
+          browser: instance,
+          css:     '.modal input[name=role_ids][value=1]',
+        )
+      elsif data[:role] == 'Customer'
+        check(
+          browser: instance,
+          css:     '.modal input[name=role_ids][value=3]',
+        )
+      elsif data[:role] == 'Agent'
+        check(
+          browser: instance,
+          css:     '.modal input[name=role_ids][value=2]',
+        )
+        data[:permissions].each do |key, value|
+          value.each do |permission|
+            check(
+              browser: instance,
+              css:     ".modal input[name=\"group_ids::#{key}\"][value=\"#{permission}\"]",
+            )
+          end
+        end
+      else
+        raise "Unknown :role \"#{data[:role]}\" in user_create()"
+      end
+    else
+      check(
+        browser: instance,
+        css:     '.modal input[name=role_ids][value=3]',
+      )
+    end
+
+    click(
       browser: instance,
-      css:     '.modal input[name=role_ids][value=3]',
+      css:     '.modal .js-submit',
     )
-    instance.find_elements(css: '.modal button.js-submit')[0].click
+
     modal_disappear(
       browser: instance,
       timeout: 10,
@@ -2909,6 +2960,144 @@ wait untill text in selector disabppears
     )
 
     assert(true, 'user created')
+  end
+
+=begin
+
+  user_edit(
+    browser: browser2,
+    data: {
+      login:      'some login' + random,
+      firstname:   'Manage Firstname' + random,
+      lastname:    'Manage Lastname' + random,
+      email:       user_email,
+      password:    'some-pass',
+      role:        'Agent',     # when the role is Agent an array of permissions for each group is optionally accepted
+      permissions: { 1 => %w[read create overview],
+                       2 => ['full'], }
+    },
+  )
+
+=end
+
+  def user_edit(params = {})
+    switch_window_focus(params)
+    log('user_edit', params)
+
+    instance = params[:browser] || @browser
+    data     = params[:data]
+
+    click(
+      browser: instance,
+      css:  'a[href="#manage"]',
+      mute_log: true,
+    )
+    click(
+      browser: instance,
+      css:  '.content.active a[href="#manage/users"]',
+      mute_log: true,
+    )
+    instance.find_elements(css: '.content.active .user-list td:first-child').each do |element|
+      next if element.text.strip != data[:login]
+      element.click
+      break
+    end
+    modal_ready(browser: instance)
+    if data[:firstname]
+      element = instance.find_elements(css: '.modal input[name=firstname]')[0]
+      element.clear
+      element.send_keys(data[:firstname])
+    end
+    if data[:lastname]
+      element = instance.find_elements(css: '.modal input[name=lastname]')[0]
+      element.clear
+      element.send_keys(data[:lastname])
+    end
+    if data[:email]
+      element = instance.find_elements(css: '.modal input[name=email]')[0]
+      element.clear
+      element.send_keys(data[:email])
+    end
+    if data[:password]
+      element = instance.find_elements(css: '.modal input[name=password]')[0]
+      element.clear
+      element.send_keys(data[:password])
+      element = instance.find_elements(css: '.modal input[name=password_confirm]')[0]
+      element.clear
+      element.send_keys(data[:password])
+    end
+    if data[:phone]
+      element = instance.find_elements(css: '.modal input[name=phone]')[0]
+      element.clear
+      element.send_keys(data[:phone])
+    end
+    if data[:active].present?
+      select(css: 'select[name="active"]', value: data[:active] ? 'active' : 'inactive' )
+    end
+
+    if data[:organization]
+      element = instance.find_elements(css: '.modal input.searchableSelect-main')[0]
+      element.clear
+      element.send_keys(data[:organization])
+
+      begin
+        retries ||= 0
+        target    = nil
+        until target
+          sleep 0.5
+          target = instance.find_elements(css: ".modal li[title='#{data[:organization]}']")[0]
+        end
+        target.click()
+      rescue Selenium::WebDriver::Error::StaleElementReferenceError
+        sleep retries
+        retries += 1
+        retry if retries < 3
+      end
+    end
+
+    if data[:role]
+      if data[:role] == 'Admin'
+        check(
+          browser: instance,
+          css:     '.modal input[name=role_ids][value=1]',
+        )
+      elsif data[:role] == 'Customer'
+        check(
+          browser: instance,
+          css:     '.modal input[name=role_ids][value=3]',
+        )
+      elsif data[:role] == 'Agent'
+        check(
+          browser: instance,
+          css:     '.modal input[name=role_ids][value=2]',
+        )
+      else
+        raise "Unknown :role \"#{data[:role]}\" in user_create()"
+      end
+    end
+
+    if data[:permissions].present?
+      data[:permissions].each do |key, value|
+        value.each do |permission|
+          check(
+            browser: instance,
+            css:     ".modal input[name=\"group_ids::#{key}\"][value=\"#{permission}\"]",
+          )
+        end
+      end
+    end
+
+    click(
+      browser: instance,
+      css:     '.modal .js-submit',
+    )
+
+    modal_disappear(
+      browser: instance,
+      timeout: 10,
+    )
+
+    assert(true, 'user updated')
   end
 
 =begin
@@ -3626,6 +3815,7 @@ wait untill text in selector disabppears
   object_manager_attribute_create(
     browser: browser2,
     data: {
+      object: 'Ticket', # optional, defaults to Ticket
       name: 'field_name' + random,
       display: 'Display Name of Field',
       data_type: 'Select',
@@ -3644,6 +3834,7 @@ wait untill text in selector disabppears
   object_manager_attribute_create(
     browser: browser2,
     data: {
+      object: 'Ticket', # optional, defaults to Ticket
       name: 'field_name' + random,
       display: 'Display Name of Field',
       data_type: 'Text',
@@ -3658,6 +3849,7 @@ wait untill text in selector disabppears
   object_manager_attribute_create(
     browser: browser2,
     data: {
+      object: 'Ticket', # optional, defaults to Ticket
       name: 'field_name' + random,
       display: 'Display Name of Field',
       data_type: 'Integer',
@@ -3673,6 +3865,7 @@ wait untill text in selector disabppears
   object_manager_attribute_create(
     browser: browser2,
     data: {
+      object: 'Ticket', # optional, defaults to Ticket
       name: 'field_name' + random,
       display: 'Display Name of Field',
       data_type: 'Datetime',
@@ -3688,6 +3881,7 @@ wait untill text in selector disabppears
   object_manager_attribute_create(
     browser: browser2,
     data: {
+      object: 'Ticket', # optional, defaults to Ticket
       name: 'field_name' + random,
       display: 'Display Name of Field',
       data_type: 'Date',
@@ -3703,6 +3897,7 @@ wait untill text in selector disabppears
   object_manager_attribute_create(
     browser: browser2,
     data: {
+      object: 'Ticket', # optional, defaults to Ticket
       name: 'field_name' + random,
       display: 'Display Name of Field',
       data_type: 'Boolean',
@@ -3726,6 +3921,9 @@ wait untill text in selector disabppears
     instance = params[:browser] || @browser
     data     = params[:data]
 
+    data[:object] = data[:object] || 'Ticket'
+    raise 'invalid object parameter in object_manager_attribute_create' if %w[Ticket User Organization Group].exclude? data[:object]
+
     # make sure that required params are supplied
     %i[name display data_type].each do |s|
       next if data.key? s
@@ -3748,7 +3946,12 @@ wait untill text in selector disabppears
     )
     click(
       browser:  instance,
-      css:      '.content.active .js-new',
+      css:      ".content.active a[href='#c-#{data[:object]}']",
+      mute_log: true,
+    )
+    click(
+      browser:  instance,
+      css:      ".content.active #c-#{data[:object]} .js-new",
       mute_log: true,
     )
 
@@ -3760,6 +3963,7 @@ wait untill text in selector disabppears
   object_manager_attribute_update(
     browser: browser2,
     data: {
+      object: 'Ticket', # optional, defaults to Ticket
       name: 'field_name' + random,
       display: 'Display Name of Field',
       data_type: 'Select',
@@ -3784,6 +3988,9 @@ wait untill text in selector disabppears
     instance = params[:browser] || @browser
     data     = params[:data]
 
+    data[:object] = data[:object] || 'Ticket'
+    raise 'invalid object parameter in object_manager_attribute_update' if %w[Ticket User Organization Group].exclude? data[:object]
+
     click(
       browser:  instance,
       css:      'a[href="#manage"]',
@@ -3798,7 +4005,12 @@ wait untill text in selector disabppears
       browser: instance,
       css:     '.content.active .js-new',
     )
-    instance.execute_script("$(\".content.active td:contains('#{data[:name]}')\").first().click()")
+    click(
+      browser:  instance,
+      css:      ".content.active a[href='#c-#{data[:object]}']",
+      mute_log: true,
+    )
+    instance.execute_script("$(\".content.active #c-#{data[:object]} td:contains('#{data[:name]}')\").first().click()")
 
     object_manager_attribute_perform('update', params)
   end
@@ -3808,6 +4020,7 @@ wait untill text in selector disabppears
   object_manager_attribute_delete(
     browser: browser2,
     data: {
+      object: 'Ticket', # optional, defaults to Ticket
       name: 'field_name' + random,
     },
   )
@@ -3821,6 +4034,9 @@ wait untill text in selector disabppears
     instance = params[:browser] || @browser
     data     = params[:data]
 
+    data[:object] = data[:object] || 'Ticket'
+    raise 'invalid object parameter in object_manager_attribute_delete' if %w[Ticket User Organization Group].exclude? data[:object]
+
     click(
       browser: instance,
       css: 'a[href="#manage"]',
@@ -3831,12 +4047,18 @@ wait untill text in selector disabppears
       css: '.content.active a[href="#system/object_manager"]',
       mute_log: true,
     )
+    watch_for(
+      browser: instance,
+      css:     '.content.active .js-new',
+    )
+    click(
+      browser:  instance,
+      css:      ".content.active a[href='#c-#{data[:object]}']",
+      mute_log: true,
+    )
     sleep 4
 
-    instance = params[:browser] || @browser
-    data     = params[:data]
-    r = instance.execute_script("$(\".content.active td:contains('#{data[:name]}')\").first().closest('tr').find('.js-delete').click()")
-    #p "rrr #{r.inspect}"
+    r = instance.execute_script("$(\".content.active #c-#{data[:object]} td:contains('#{data[:name]}')\").first().closest('tr').find('.js-delete').click()")
   end
 
 =begin

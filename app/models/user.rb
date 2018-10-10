@@ -19,7 +19,8 @@ class User < ApplicationModel
   has_many                :authorizations, after_add: :cache_update, after_remove: :cache_update
   belongs_to              :organization,   inverse_of: :members
 
-  before_validation :check_name, :check_email, :check_login, :check_mail_delivery_failed, :ensure_uniq_email, :ensure_password, :ensure_roles, :ensure_identifier
+  before_validation :check_name, :check_email, :check_login, :ensure_uniq_email, :ensure_password, :ensure_roles, :ensure_identifier
+  before_validation :check_mail_delivery_failed, on: :update
   before_create   :check_preferences_default, :validate_preferences, :validate_ooo, :domain_based_assignment, :set_locale
   before_update   :check_preferences_default, :validate_preferences, :validate_ooo, :reset_login_failed, :validate_agent_limit_by_attributes, :last_admin_check_by_attribute
   after_create    :avatar_for_email_check
@@ -1153,15 +1154,15 @@ raise 'Minimum one user need to have admin permissions'
   end
 
   def destroy_longer_required_objects
-    Authorization.where(user_id: id).destroy_all
-    Avatar.remove('User', id)
-    Cti::CallerId.where(user_id: id).destroy_all
-    Taskbar.where(user_id: id).destroy_all
-    Karma::ActivityLog.where(user_id: id).destroy_all
-    Karma::User.where(user_id: id).destroy_all
-    OnlineNotification.where(user_id: id).destroy_all
-    RecentView.where(created_by_id: id).destroy_all
-    UserDevice.remove(id)
+    ::Authorization.where(user_id: id).destroy_all
+    ::Avatar.remove('User', id)
+    ::Cti::CallerId.where(user_id: id).destroy_all
+    ::Taskbar.where(user_id: id).destroy_all
+    ::Karma::ActivityLog.where(user_id: id).destroy_all
+    ::Karma::User.where(user_id: id).destroy_all
+    ::OnlineNotification.where(user_id: id).destroy_all
+    ::RecentView.where(created_by_id: id).destroy_all
+    ::UserDevice.remove(id)
     true
   end
 
