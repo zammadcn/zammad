@@ -15,12 +15,13 @@ module Cti
   Cti::Log.create!(
     direction: 'in',
     from: '007',
-    from_comment: 'AAA',
+    from_comment: '',
     to: '008',
     to_comment: 'BBB',
     call_id: '1',
     comment: '',
     state: 'newCall',
+    done: true,
   )
 
   Cti::Log.create!(
@@ -32,6 +33,7 @@ module Cti
     call_id: '2',
     comment: '',
     state: 'answer',
+    done: true,
   )
 
   Cti::Log.create!(
@@ -43,6 +45,7 @@ module Cti
     call_id: '3',
     comment: '',
     state: 'hangup',
+    done: true,
   )
 
 example data, can be used for demo
@@ -66,7 +69,15 @@ example data, can be used for demo
           object: 'User',
           o_id: 2,
           user_id: 2,
-        }
+        },
+        {
+          caller_id: '4930726128135',
+          comment: nil,
+          level: 'maybe',
+          object: 'User',
+          o_id: 2,
+          user_id: 3,
+        },
       ]
     },
     created_at: Time.zone.now,
@@ -81,6 +92,7 @@ example data, can be used for demo
     call_id: rand(999_999_999),
     comment: '',
     state: 'newCall',
+    done: true,
     preferences: {
       to: [
         {
@@ -105,6 +117,7 @@ example data, can be used for demo
     call_id: rand(999_999_999),
     comment: '',
     state: 'answer',
+    done: true,
     preferences: {
       from: [
         {
@@ -163,6 +176,7 @@ example data, can be used for demo
     call_id: rand(999_999_999),
     comment: '',
     state: 'hangup',
+    done: true,
     start_at: Time.zone.now - 15.seconds,
     end_at: Time.zone.now,
     preferences: {
@@ -194,6 +208,7 @@ example data, can be used for demo
     call_id: rand(999_999_999),
     comment: '',
     state: 'hangup',
+    done: true,
     start_at: Time.zone.now - 15.seconds,
     end_at: Time.zone.now,
     preferences: {
@@ -225,6 +240,7 @@ example data, can be used for demo
     call_id: rand(999_999_999),
     comment: '',
     state: 'hangup',
+    done: true,
     start_at: Time.zone.now - 15.seconds,
     end_at: Time.zone.now,
     preferences: {
@@ -254,6 +270,7 @@ example data, can be used for demo
     call_id: rand(999_999_999),
     comment: '',
     state: 'hangup',
+    done: true,
     start_at: Time.zone.now - 20.seconds,
     end_at: Time.zone.now,
     preferences: {},
@@ -269,7 +286,7 @@ example data, can be used for demo
 
 =begin
 
-  Cti::Log.log
+  Cti::Log.log(current_user)
 
 returns
 
@@ -280,8 +297,8 @@ returns
 
 =end
 
-    def self.log
-      list = Cti::Log.log_records
+    def self.log(current_user)
+      list = Cti::Log.log_records(current_user)
 
       # add assets
       assets = list.map(&:preferences)
@@ -299,7 +316,7 @@ returns
 
 =begin
 
-  Cti::Log.log_records
+  Cti::Log.log_records(current_user)
 
 returns
 
@@ -307,8 +324,13 @@ returns
 
 =end
 
-    def self.log_records
-      Cti::Log.order('created_at DESC, id DESC').limit(60)
+    def self.log_records(current_user)
+      cti_config = Setting.get('cti_config')
+      if cti_config[:notify_map].present?
+        return Cti::Log.where(queue: queues_of_user(current_user, cti_config[:notify_map])).order(created_at: :desc).limit(60)
+      end
+
+      Cti::Log.order(created_at: :desc).limit(60)
     end
 
 =begin
@@ -349,9 +371,15 @@ Cti::Log.process(
           to_comment = queue
         end
         from_comment, preferences = CallerId.get_comment_preferences(params['from'], 'from')
+        if queue.blank?
+          queue = params['to']
+        end
       else
         from_comment = user
         to_comment, preferences = CallerId.get_comment_preferences(params['to'], 'to')
+        if queue.blank?
+          queue = params['from']
+        end
       end
 
       log = find_by(call_id: call_id)
@@ -392,6 +420,8 @@ Cti::Log.process(
           log.comment = cause
           log.save
         end
+
+        log.push_open_ticket_screen(params, log)
       when 'hangup'
         raise "No such call_id #{call_id}" if !log
 
@@ -419,10 +449,57 @@ Cti::Log.process(
       end
     end
 
+    def push_open_ticket_screen(params, _log)
+      return true if params[:event] != 'answer'
+      return true if params[:direction] != 'in'
+      return true if params[:user_id].blank?
+
+      # get user_id of answered user
+      #user_id = PlacetelHelper.get_user_id_by_peer(params[:user])
+      user_id = params[:user_id]
+      return if !user_id
+      return if !User.exists?(user_id)
+
+      id = rand(999_999_999)
+      Sessions.send_to(user_id, {
+                         event: 'remote_task',
+                         data:  {
+                           key:        "TicketCreateScreen-#{id}",
+                           controller: 'TicketCreate',
+                           params:     { customer_id: user_id.to_s, title: 'Call' },
+                           show:       false,
+                           url:        "ticket/create/id/#{id}"
+                         },
+                       })
+    end
+
     def push_incoming_call
       return true if destroyed?
       return true if state != 'newCall'
       return true if direction != 'in'
+
+      # check if only a certain user should get the notification
+      config = Setting.get('cti_config')
+      if config && config[:notify_map].present?
+        config[:notify_map].each do |row|
+          next unless row[:user_ids].present? && row[:caller_id] == to
+
+          row[:user_ids].each do |user_id|
+            user = User.find_by(id: user_id)
+            next if !user
+            next if !user.permissions?('cti.agent')
+
+            Sessions.send_to(
+              user.id,
+              {
+                event: 'cti_event',
+                data:  self,
+              },
+            )
+          end
+        end
+        return true
+      end
 
       # send notify about event
       users = User.with_permissions('cti.agent')
@@ -439,7 +516,7 @@ Cti::Log.process(
     end
 
     def self.push_caller_list_update?(record)
-      list_ids = Cti::Log.log_records.pluck(:id)
+      list_ids = Cti::Log.order(created_at: :desc).limit(60).pluck(:id)
       return true if list_ids.include?(record.id)
 
       false
@@ -497,6 +574,17 @@ optional you can put the max oldest chat entries as argument
     def to_pretty
       parsed = TelephoneNumber.parse(to&.sub(/^\+?/, '+'))
       parsed.send(parsed.valid? ? :international_number : :original_number)
+    end
+
+    def self.queues_of_user(user, config)
+      queues = []
+      config.each do |row|
+        next if row[:user_ids].blank?
+        next if !row[:user_ids].include?(user.id.to_s) && !row[:user_ids].include?(user.id)
+
+        queues.push row[:queue]
+      end
+      queues
     end
   end
 end

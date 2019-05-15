@@ -204,6 +204,20 @@ class App extends Spine.Controller
       return true if contentType.match(/image\/(png|jpg|jpeg|gif)/i)
       false
 
+    unique_avatar: (seed, text, size = 40) ->
+      baseSize = 40
+      width  = 300 * size/baseSize
+      height = 226 * size/baseSize
+
+      rng = new Math.seedrandom(seed)
+      x   = rng() * (width - size)
+      y   = rng() * (height - size)
+
+      return App.view('avatar_unique')
+        x: x
+        y: y
+        initials: text
+
   @viewPrint: (object, attributeName, attributes, table) ->
     if !attributes
       attributes = {}

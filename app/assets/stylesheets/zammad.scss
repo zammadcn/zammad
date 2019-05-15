@@ -111,6 +111,10 @@ strong {
   font-weight: 500;
 }
 
+.inherit-color {
+  color: inherit;
+}
+
 .text-muted {
   color: hsl(60,1%,74%);
 }
@@ -394,6 +398,10 @@ pre code.hljs {
   &--small {
     padding-top: 5px;
     padding-bottom: 4px;
+    
+    &.btn--quad {
+      padding: 4px 5px;
+    }
   }
 
   &--slim {
@@ -563,6 +571,11 @@ pre code.hljs {
     background: none;
     vertical-align: baseline;
     text-align: start;
+    
+    &.no-padding {
+      padding: 0;
+      margin: 0;
+    }
 
     .icon {
       opacity: 1;
@@ -1055,6 +1068,11 @@ th.align-right {
   .icon {
     opacity: 0.33;
   }
+
+  .avatar {
+    background: hsl(120,1%,86%);
+    text-shadow: none;
+  }
 }
 
 .table .icon {
@@ -1185,6 +1203,11 @@ th.align-right {
 .table .radio-replacement {
   height: 40px;
   width: 40px;
+  
+  &.checkbox-replacement--fullscreen {
+    width: 100%;
+    height: 100%;
+  }
 }
 
 .table-overview tbody .icon-checkbox,
@@ -3221,6 +3244,45 @@ footer {
     margin-top: 2px;
   }
 
+  .call-widget {
+    background: hsl(228,17%,91%);
+    padding: 8px 10px;
+    
+    & + & {
+      border-top: 1px solid hsl(228,10%,81%);
+    }
+    
+    &-header {
+      display: flex;
+      color: inherit;
+      margin-bottom: 3px;
+      
+      .label {
+        color: inherit;
+        margin: 0;
+      }
+
+      .btn--text {
+        color: inherit;
+        opacity: .5;
+        
+        &:hover {
+          opacity: 1;
+        }
+      }
+
+      .icon-diagonal-cross {
+        width: 9px;
+        height: 9px;
+        margin-top: -5px;
+      }
+    }
+
+    .text-muted {
+      color: hsl(228,6%,67%);
+    }
+  }
+
 .tasks {
   background: #2c2d36;
   flex: 1;
@@ -4304,6 +4366,21 @@ footer {
 .ticket-popover,
 .organization-popover {
   @extend .u-clickable;
+}
+
+.user-card {
+  padding: 2px 0 0 50px;
+  position: relative;
+  min-height: 40px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  
+  .avatar {
+    position: absolute;
+    left: 0;
+    top: 0;
+  }
 }
 
 .stat-icon {
