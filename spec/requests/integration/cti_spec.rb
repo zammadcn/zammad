@@ -153,7 +153,7 @@ RSpec.describe 'Integration CTI', type: :request do
       expect(log.from_comment).to eq('user 1')
       expect(log.to_comment).to eq('CallerId Customer1')
       expect(log.comment).to be_nil
-      expect(log.queue).to be_nil
+      expect(log.queue).to eq('4930777000000')
       expect(log.state).to eq('newCall')
       expect(log.done).to eq(true)
       expect(log.initialized_at).to be_truthy
@@ -176,7 +176,7 @@ RSpec.describe 'Integration CTI', type: :request do
       expect(log.from_comment).to eq('user 1')
       expect(log.to_comment).to eq('CallerId Customer1')
       expect(log.comment).to eq('cancel')
-      expect(log.queue).to be_nil
+      expect(log.queue).to eq('4930777000000')
       expect(log.state).to eq('hangup')
       expect(log.done).to eq(true)
       expect(log.initialized_at).to be_truthy
@@ -197,7 +197,7 @@ RSpec.describe 'Integration CTI', type: :request do
       expect(log.from_comment).to eq('user 1')
       expect(log.to_comment).to eq('CallerId Customer1')
       expect(log.comment).to be_nil
-      expect(log.queue).to be_nil
+      expect(log.queue).to eq('4930777000000')
       expect(log.state).to eq('newCall')
       expect(log.done).to eq(true)
       expect(log.initialized_at).to be_truthy
@@ -220,7 +220,7 @@ RSpec.describe 'Integration CTI', type: :request do
       expect(log.from_comment).to eq('user 1')
       expect(log.to_comment).to eq('CallerId Customer1')
       expect(log.comment).to be_nil
-      expect(log.queue).to be_nil
+      expect(log.queue).to eq('4930777000000')
       expect(log.state).to eq('answer')
       expect(log.done).to eq(true)
       expect(log.initialized_at).to be_truthy
@@ -243,7 +243,7 @@ RSpec.describe 'Integration CTI', type: :request do
       expect(log.from_comment).to eq('user 1')
       expect(log.to_comment).to eq('CallerId Customer1')
       expect(log.comment).to eq('normalClearing')
-      expect(log.queue).to be_nil
+      expect(log.queue).to eq('4930777000000')
       expect(log.state).to eq('hangup')
       expect(log.done).to eq(true)
       expect(log.initialized_at).to be_truthy
@@ -264,7 +264,7 @@ RSpec.describe 'Integration CTI', type: :request do
       expect(log.to_comment).to eq('user 1')
       expect(log.from_comment).to eq('CallerId Customer1')
       expect(log.comment).to be_nil
-      expect(log.queue).to be_nil
+      expect(log.queue).to eq('4930600000000')
       expect(log.state).to eq('newCall')
       expect(log.done).to eq(false)
       expect(log.initialized_at).to be_truthy
@@ -285,7 +285,7 @@ RSpec.describe 'Integration CTI', type: :request do
       expect(log.to_comment).to eq('user 1')
       expect(log.from_comment).to eq('CallerId Customer1')
       expect(log.comment).to be_nil
-      expect(log.queue).to be_nil
+      expect(log.queue).to eq('4930600000000')
       expect(log.state).to eq('answer')
       expect(log.done).to eq(true)
       expect(log.initialized_at).to be_truthy
@@ -306,7 +306,7 @@ RSpec.describe 'Integration CTI', type: :request do
       expect(log.to_comment).to eq('user 1')
       expect(log.from_comment).to eq('CallerId Customer1')
       expect(log.comment).to eq('normalClearing')
-      expect(log.queue).to be_nil
+      expect(log.queue).to eq('4930600000000')
       expect(log.state).to eq('hangup')
       expect(log.done).to eq(true)
       expect(log.initialized_at).to be_truthy
@@ -327,7 +327,7 @@ RSpec.describe 'Integration CTI', type: :request do
       expect(log.to_comment).to eq('user 1,user 2')
       expect(log.from_comment).to eq('CallerId Customer1')
       expect(log.comment).to be_nil
-      expect(log.queue).to be_nil
+      expect(log.queue).to eq('4930600000000')
       expect(log.state).to eq('newCall')
       expect(log.done).to eq(false)
       expect(log.initialized_at).to be_truthy
@@ -348,7 +348,7 @@ RSpec.describe 'Integration CTI', type: :request do
       expect(log.to_comment).to eq('voicemail')
       expect(log.from_comment).to eq('CallerId Customer1')
       expect(log.comment).to be_nil
-      expect(log.queue).to be_nil
+      expect(log.queue).to eq('4930600000000')
       expect(log.state).to eq('answer')
       expect(log.done).to eq(true)
       expect(log.initialized_at).to be_truthy
@@ -369,7 +369,7 @@ RSpec.describe 'Integration CTI', type: :request do
       expect(log.to_comment).to eq('voicemail')
       expect(log.from_comment).to eq('CallerId Customer1')
       expect(log.comment).to eq('normalClearing')
-      expect(log.queue).to be_nil
+      expect(log.queue).to eq('4930600000000')
       expect(log.state).to eq('hangup')
       expect(log.done).to eq(false)
       expect(log.initialized_at).to be_truthy
@@ -390,7 +390,7 @@ RSpec.describe 'Integration CTI', type: :request do
       expect(log.to_comment).to eq('user 1,user 2')
       expect(log.from_comment).to eq('CallerId Customer1')
       expect(log.comment).to be_nil
-      expect(log.queue).to be_nil
+      expect(log.queue).to eq('4930600000000')
       expect(log.state).to eq('newCall')
       expect(log.done).to eq(false)
       expect(log.initialized_at).to be_truthy
@@ -411,7 +411,7 @@ RSpec.describe 'Integration CTI', type: :request do
       expect(log.to_comment).to eq('user 1,user 2')
       expect(log.from_comment).to eq('CallerId Customer1')
       expect(log.comment).to eq('normalClearing')
-      expect(log.queue).to be_nil
+      expect(log.queue).to eq('4930600000000')
       expect(log.state).to eq('hangup')
       expect(log.done).to eq(false)
       expect(log.initialized_at).to be_truthy
@@ -434,7 +434,7 @@ RSpec.describe 'Integration CTI', type: :request do
       expect(log.preferences['to']).to be_falsey
       expect(log.preferences['from']).to be_truthy
       expect(log.comment).to be_nil
-      expect(log.queue).to be_nil
+      expect(log.queue).to eq('4930600000000')
       expect(log.state).to eq('newCall')
       expect(log.done).to eq(false)
       expect(log.initialized_at).to be_truthy
