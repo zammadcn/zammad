@@ -42,6 +42,8 @@ module Cti
 
 =begin
 
+get items (users) for a certain caller id
+
   caller_id_records = Cti::CallerId.lookup('49123456789')
 
 returns

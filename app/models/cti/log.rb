@@ -452,21 +452,45 @@ Cti::Log.process(
     def push_open_ticket_screen(params, _log)
       return true if params[:event] != 'answer'
       return true if params[:direction] != 'in'
-      return true if params[:user_id].blank?
 
-      # get user_id of answered user
-      #user_id = PlacetelHelper.get_user_id_by_peer(params[:user])
-      user_id = params[:user_id]
-      return if !user_id
-      return if !User.exists?(user_id)
+      # try to find answering which answered call
+      user = nil
+
+      # based on answeringNumber
+      if params[:answeringNumber].present?
+        user = nil
+        caller_ids = Cti::CallerId.extract_numbers(params[:answeringNumber])
+        caller_ids.each do |_caller_id|
+          caller_id_records = Cti::CallerId.lookup(caller_ids)
+          caller_id_records.each do |caller_id_record|
+            next if caller_id_record.object != 'User'
+            next if caller_id_record.level != 'known'
+
+            user = User.find_by(id: caller_id_record.o_id)
+            break if user
+          end
+        end
+      end
+
+      # based on user param
+      if !user && params[:user].present?
+        user = User.find_by(login: params[:user].downcase)
+      end
+
+      # based on user_id param
+      if !user && params[:user_id].present?
+        user = User.find_by(id: params[:user_id])
+      end
+
+      return if !user
 
       id = rand(999_999_999)
-      Sessions.send_to(user_id, {
+      Sessions.send_to(user.id, {
                          event: 'remote_task',
                          data:  {
                            key:        "TicketCreateScreen-#{id}",
                            controller: 'TicketCreate',
-                           params:     { customer_id: user_id.to_s, title: 'Call' },
+                           params:     { customer_id: user.id.to_s, title: 'Call' },
                            show:       false,
                            url:        "ticket/create/id/#{id}"
                          },
