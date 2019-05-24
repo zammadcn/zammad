@@ -449,9 +449,7 @@ Cti::Log.process(
       end
     end
 
-    def push_open_ticket_screen(params, _log)
-      return true if params[:event] != 'answer'
-      return true if params[:direction] != 'in'
+    def push_open_ticket_screen_recipient(params, _log)
 
       # try to find answering which answered call
       user = nil
@@ -482,6 +480,14 @@ Cti::Log.process(
         user = User.find_by(id: params[:user_id])
       end
 
+      user
+    end
+
+    def push_open_ticket_screen(params, log)
+      return true if params[:event] != 'answer'
+      return true if params[:direction] != 'in'
+
+      user = push_open_ticket_screen_recipient(params, log)
       return if !user
 
       id = rand(999_999_999)
@@ -490,8 +496,8 @@ Cti::Log.process(
                          data:  {
                            key:        "TicketCreateScreen-#{id}",
                            controller: 'TicketCreate',
-                           params:     { customer_id: user.id.to_s, title: 'Call' },
-                           show:       false,
+                           params:     { customer_id: user.id.to_s, title: 'Call', id: id },
+                           show:       true,
                            url:        "ticket/create/id/#{id}"
                          },
                        })
