@@ -4372,10 +4372,11 @@ footer {
   padding: 2px 0 0 50px;
   position: relative;
   min-height: 40px;
+  max-width: 192px;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  
+
   .avatar {
     position: absolute;
     left: 0;
