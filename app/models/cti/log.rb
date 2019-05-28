@@ -456,18 +456,7 @@ Cti::Log.process(
 
       # based on answeringNumber
       if params[:answeringNumber].present?
-        user = nil
-        caller_ids = Cti::CallerId.extract_numbers(params[:answeringNumber])
-        caller_ids.each do |_caller_id|
-          caller_id_records = Cti::CallerId.lookup(caller_ids)
-          caller_id_records.each do |caller_id_record|
-            next if caller_id_record.object != 'User'
-            next if caller_id_record.level != 'known'
-
-            user = User.find_by(id: caller_id_record.o_id)
-            break if user
-          end
-        end
+        user = user_ids_by_number(params[:answeringNumber]).first
       end
 
       # based on user param
@@ -511,22 +500,32 @@ Cti::Log.process(
       # check if only a certain user should get the notification
       config = Setting.get('cti_config')
       if config && config[:notify_map].present?
+        user_ids = []
         config[:notify_map].each do |row|
-          next unless row[:user_ids].present? && row[:caller_id] == to
+          next if row[:user_ids].blank? || row[:queue] != to
 
           row[:user_ids].each do |user_id|
             user = User.find_by(id: user_id)
             next if !user
             next if !user.permissions?('cti.agent')
 
-            Sessions.send_to(
-              user.id,
-              {
-                event: 'cti_event',
-                data:  self,
-              },
-            )
+            user_ids.push user.id
           end
+        end
+
+        # add agents which have this number directly assigned
+        user_ids_by_number(to).each do |user|
+          user_ids.push user.id
+        end
+
+        user_ids.uniq.each do |user_id|
+          Sessions.send_to(
+            user_id,
+            {
+              event: 'cti_event',
+              data:  self,
+            },
+          )
         end
         return true
       end
@@ -614,7 +613,28 @@ optional you can put the max oldest chat entries as argument
 
         queues.push row[:queue]
       end
+      if user.phone.present?
+        caller_ids = Cti::CallerId.extract_numbers(user.phone)
+        queues = queues.concat(caller_ids)
+      end
       queues
+    end
+
+    def user_ids_by_number(number)
+      users = []
+      caller_ids = Cti::CallerId.extract_numbers(number)
+      caller_id_records = Cti::CallerId.lookup(caller_ids)
+      caller_id_records.each do |caller_id_record|
+        next if caller_id_record.object != 'User'
+        next if caller_id_record.level != 'known'
+
+        user = User.find_by(id: caller_id_record.o_id)
+        next if !user
+        next if !user.permissions?('cti.agent')
+
+        users.push user
+      end
+      users
     end
   end
 end
