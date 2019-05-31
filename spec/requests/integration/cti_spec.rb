@@ -61,10 +61,6 @@ RSpec.describe 'Integration CTI', type: :request do
                         note:      'some note',
                       }
                     ],
-                    notify_user_ids:  {
-                      2 => true,
-                      4 => false,
-                    },
                   }
                 })
 
@@ -466,10 +462,10 @@ RSpec.describe 'Integration CTI', type: :request do
       expect(log.duration_waiting_time).to be_nil
       expect(log.duration_talking_time).to be_nil
 
-      # get caller list
       get '/api/v1/cti/log'
       expect(response).to have_http_status(401)
 
+      # get caller list
       authenticated_as(agent_user)
       get '/api/v1/cti/log', as: :json
       expect(response).to have_http_status(200)
@@ -493,6 +489,69 @@ RSpec.describe 'Integration CTI', type: :request do
       expect(json_response['list'][5]['comment']).to eq('normalClearing')
       expect(json_response['list'][5]['state']).to eq('hangup')
       expect(json_response['list'][6]['call_id']).to eq('1234567890-1')
+    end
+
+    it 'does log call with notify group with two a log entry' do
+      token = Setting.get('cti_token')
+
+      # outbound - I - new call
+      params = 'event=newCall&direction=out&from=4930600000000&to=4912347114711&call_id=1234567890-1&user%5B%5D=user+1'
+      post "/api/v1/cti/#{token}", params: params
+      expect(response).to have_http_status(200)
+
+      # outbound - II - new call
+      params = 'event=newCall&direction=out&from=4930600000000&to=4912347114711&call_id=1234567890-2&user%5B%5D=user+1'
+      post "/api/v1/cti/#{token}", params: params
+
+      # inbound - III - new call
+      params = 'event=newCall&direction=in&to=4930600000000&from=4912347114711&call_id=1234567890-5&user%5B%5D=user+1,user+2'
+      post "/api/v1/cti/#{token}", params: params
+      expect(response).to have_http_status(200)
+
+      # get caller list (with notify group with 2 log entries)
+      cti_config = Setting.get('cti_config')
+      cti_config[:notify_map] = [{ queue: '4930777000000', user_ids: [agent_user.id.to_s] }]
+      Setting.set('cti_config', cti_config)
+
+      authenticated_as(agent_user)
+      get '/api/v1/cti/log', as: :json
+
+      expect(response).to have_http_status(200)
+      expect(json_response['list']).to be_a_kind_of(Array)
+      expect(json_response['list'].count).to eq(2)
+      expect(json_response['assets']).to be_truthy
+      expect(json_response['assets']['User']).to be_truthy
+      expect(json_response['list'][0]['call_id']).to eq('1234567890-2')
+      expect(json_response['list'][1]['call_id']).to eq('1234567890-1')
+    end
+
+    it 'does log call with notify group without a log entry' do
+      token = Setting.get('cti_token')
+
+      # outbound - I - new call
+      params = 'event=newCall&direction=out&from=4930600000000&to=4912347114711&call_id=1234567890-1&user%5B%5D=user+1'
+      post "/api/v1/cti/#{token}", params: params
+      expect(response).to have_http_status(200)
+
+      # outbound - II - new call
+      params = 'event=newCall&direction=out&from=4930600000000&to=4912347114711&call_id=1234567890-2&user%5B%5D=user+1'
+      post "/api/v1/cti/#{token}", params: params
+
+      # inbound - III - new call
+      params = 'event=newCall&direction=in&to=4930600000000&from=4912347114711&call_id=1234567890-5&user%5B%5D=user+1,user+2'
+      post "/api/v1/cti/#{token}", params: params
+      expect(response).to have_http_status(200)
+
+      # get caller list (with notify group without a log entry)
+      cti_config = Setting.get('cti_config')
+      cti_config[:notify_map] = [{ queue: '4912347114711', user_ids: [agent_user.to_s] }]
+      Setting.set('cti_config', cti_config)
+
+      authenticated_as(agent_user)
+      get '/api/v1/cti/log', as: :json
+      expect(response).to have_http_status(200)
+      expect(json_response['list']).to be_a_kind_of(Array)
+      expect(json_response['list'].count).to eq(0)
     end
 
     it 'does queue param tests' do
