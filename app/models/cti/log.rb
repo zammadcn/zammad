@@ -327,7 +327,7 @@ returns
     def self.log_records(current_user)
       cti_config = Setting.get('cti_config')
       if cti_config[:notify_map].present?
-        return Cti::Log.where(queue: queues_of_user(current_user, cti_config[:notify_map])).order(created_at: :desc).limit(60)
+        return Cti::Log.where(queue: queues_of_user(current_user, cti_config)).order(created_at: :desc).limit(60)
       end
 
       Cti::Log.order(created_at: :desc).limit(60)
@@ -456,7 +456,7 @@ Cti::Log.process(
 
       # based on answeringNumber
       if params[:answeringNumber].present?
-        user = user_ids_by_number(params[:answeringNumber]).first
+        user = Cti::CallerId.known_agents_by_number(params[:answeringNumber]).first
       end
 
       # based on user param
@@ -479,13 +479,16 @@ Cti::Log.process(
       user = push_open_ticket_screen_recipient(params, log)
       return if !user
 
+      customer_id = best_customer_of_log_entry(log)
+      return if !customer_id
+
       id = rand(999_999_999)
       Sessions.send_to(user.id, {
                          event: 'remote_task',
                          data:  {
                            key:        "TicketCreateScreen-#{id}",
                            controller: 'TicketCreate',
-                           params:     { customer_id: user.id.to_s, title: 'Call', id: id },
+                           params:     { customer_id: customer_id.to_s, title: 'Call', id: id },
                            show:       true,
                            url:        "ticket/create/id/#{id}"
                          },
@@ -514,7 +517,7 @@ Cti::Log.process(
         end
 
         # add agents which have this number directly assigned
-        user_ids_by_number(to).each do |user|
+        Cti::CallerId.known_agents_by_number(to).each do |user|
           user_ids.push user.id
         end
 
@@ -605,9 +608,17 @@ optional you can put the max oldest chat entries as argument
       parsed.send(parsed.valid? ? :international_number : :original_number)
     end
 
+=begin
+
+returnes queues of user
+
+  ['queue1', 'queue2'] = Cti::Log.queues_of_user(User.find(123), config)
+
+=end
+
     def self.queues_of_user(user, config)
       queues = []
-      config.each do |row|
+      config[:notify_map]&.each do |row|
         next if row[:user_ids].blank?
         next if !row[:user_ids].include?(user.id.to_s) && !row[:user_ids].include?(user.id)
 
@@ -620,21 +631,30 @@ optional you can put the max oldest chat entries as argument
       queues
     end
 
-    def user_ids_by_number(number)
-      users = []
-      caller_ids = Cti::CallerId.extract_numbers(number)
-      caller_id_records = Cti::CallerId.lookup(caller_ids)
-      caller_id_records.each do |caller_id_record|
-        next if caller_id_record.object != 'User'
-        next if caller_id_record.level != 'known'
+=begin
 
-        user = User.find_by(id: caller_id_record.o_id)
-        next if !user
-        next if !user.permissions?('cti.agent')
+return best customer id of caller log
 
-        users.push user
+  log = Cti::Log.find(123)
+  customer_id = log.best_customer_of_log_entry
+
+=end
+
+    def best_customer_of_log_entry(log)
+      customer_id = nil
+      if log.preferences[:from].present?
+        log.preferences[:from].each do |entry|
+          if customer_id.blank?
+            customer_id = entry[:user_id]
+          end
+          next if entry[:level] != 'known'
+
+          customer_id = entry[:user_id]
+          break
+        end
       end
-      users
+      customer_id
     end
+
   end
 end

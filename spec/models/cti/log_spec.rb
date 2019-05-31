@@ -1,7 +1,8 @@
 require 'rails_helper'
 
 RSpec.describe Cti::Log do
-  subject(:user) { create(:user, roles: Role.where(name: 'Agent')) }
+  subject(:user) { create(:user, roles: Role.where(name: 'Agent'), phone: phone) }
+  let(:phone) { '' }
   let(:log) { create(:'cti/log') }
 
   describe '.log' do
@@ -41,15 +42,41 @@ RSpec.describe Cti::Log do
       end
 
       it 'returns one matching log record' do
-        cti_confg = Setting.get('cti_config')
-        cti_confg[:notify_map] = [ { queue: 'queue4', user_ids: [user.id.to_s] } ]
-        Setting.set('cti_config', cti_confg)
+        cti_config = Setting.get('cti_config')
+        cti_config[:notify_map] = [ { queue: 'queue4', user_ids: [user.id.to_s] } ]
+        Setting.set('cti_config', cti_config)
 
         expect(Cti::Log.log(user)[:list].count).to eq 1
         expect(Cti::Log.log(user)[:list][0].id).to eq cti_logs[3].id
       end
     end
 
+  end
+
+  describe '#push_caller_list_update?' do
+    subject!(:cti_logs) do
+      60.times.each do
+        create(:'cti/log')
+      end
+    end
+
+    context 'wenn log entry is older' do
+      it 'return false' do
+        travel -10.seconds # rubocop:disable Lint/AmbiguousOperator
+        log = create(:'cti/log')
+
+        expect(Cti::Log.push_caller_list_update?(log)).to eq false
+      end
+    end
+
+    context 'wenn log entry is newer' do
+      it 'return true' do
+        travel 10.seconds
+        log = create(:'cti/log')
+
+        expect(Cti::Log.push_caller_list_update?(log)).to eq true
+      end
+    end
   end
 
   describe '.process' do
@@ -308,6 +335,124 @@ RSpec.describe Cti::Log do
         expect(log.to_pretty).to eq('008')
       end
     end
+  end
+
+  describe '#queues_of_user' do
+    context 'without notify_map and no own phone number' do
+      it 'gives an empty array' do
+        expect(Cti::Log.queues_of_user(user, Setting.get('cti_config'))).to eq([])
+      end
+    end
+
+    context 'with notify_map and no own phone number' do
+      it 'gives an array with queue' do
+        cti_config = Setting.get('cti_config')
+        cti_config[:notify_map] = [ { queue: 'queue4', user_ids: [user.id.to_s] } ]
+        Setting.set('cti_config', cti_config)
+
+        expect(Cti::Log.queues_of_user(user, Setting.get('cti_config'))).to eq(['queue4'])
+      end
+    end
+
+    context 'with notify_map and with own phone number' do
+      let(:phone) { '012345678' }
+      it 'gives an array with queue and phone number' do
+        cti_config = Setting.get('cti_config')
+        cti_config[:notify_map] = [ { queue: 'queue4', user_ids: [user.id.to_s] } ]
+        Setting.set('cti_config', cti_config)
+
+        expect(Cti::Log.queues_of_user(user, Setting.get('cti_config'))).to eq(%w[queue4 4912345678])
+      end
+    end
+  end
+
+  describe '#best_customer_of_log_entry' do
+    subject(:customer_user1) { create(:customer_user, phone: '0123456') }
+    let(:ticket1) do
+      ticket = create(:ticket)
+      create(:ticket_article, created_by_id: customer_user3.id, body: 'some text 0123457')
+    end
+    let(:customer_user4) { create(:customer_user, phone: '0123457') }
+    let(:customer_user3) { create(:customer_user) }
+    let(:customer_user2) { create(:customer_user, phone: '0123456') }
+    let(:caller_id) { '0123456' }
+    let(:attributes) do
+      {
+        'cause'     => '',
+        'event'     => 'newCall',
+        'user'      => 'user 1',
+        'from'      => caller_id,
+        'to'        => '49123450',
+        'call_id'   => '1',
+        'direction' => 'in',
+      }
+    end
+
+    context 'with now related customer' do
+      it 'gives no caller information' do
+        Cti::Log.process(attributes)
+        expect(Cti::Log.last.preferences[:from]).to eq(nil)
+      end
+    end
+
+    context 'with related known customer' do
+      it 'gives caller information' do
+        customer_user1 # create customer
+        Cti::Log.process(attributes)
+        expect(Cti::Log.last.preferences[:from].count).to eq(1)
+        expect(Cti::Log.last.preferences[:from].first)
+          .to include(
+            'level'   => 'known',
+            'user_id' => customer_user1.id,
+          )
+      end
+    end
+
+    context 'with related known customer' do
+      it 'gives caller information' do
+        customer_user1 # create customer
+        customer_user2 # create customer
+        Cti::Log.process(attributes)
+        expect(Cti::Log.last.preferences[:from].count).to eq(2)
+        expect(Cti::Log.last.preferences[:from].first)
+          .to include(
+            'level'   => 'known',
+            'user_id' => customer_user2.id,
+          )
+      end
+    end
+
+    context 'with related maybe customer' do
+      let(:caller_id) { '0123457' }
+      it 'gives caller information' do
+        ticket1 # create ticket
+        Observer::Transaction.commit
+        Scheduler.worker(true)
+        Cti::Log.process(attributes)
+        expect(Cti::Log.last.preferences[:from].count).to eq(1)
+        expect(Cti::Log.last.preferences[:from].first)
+          .to include(
+            'level'   => 'maybe',
+            'user_id' => customer_user3.id,
+          )
+      end
+    end
+
+    context 'with related maybe and known customer' do
+      let(:caller_id) { '0123457' }
+      it 'gives caller information' do
+        ticket1 # create ticket
+        customer_user4 # create customer
+        Cti::Log.process(attributes)
+        expect(Cti::Log.last.preferences[:from].count).to eq(1)
+        expect(Cti::Log.last.preferences[:from].first)
+          .to include(
+            'level'   => 'known',
+            'user_id' => customer_user4.id,
+          )
+      end
+    end
+
   end
 
   describe '#to_json' do
