@@ -74,8 +74,8 @@ class Chat < ApplicationModel
       active_agent_ids.push user.id
       assets = user.assets(assets)
     end
-    runningchat_session_list_local = running_chat_session_list
-    runningchat_session_list_local.each do |session|
+    running_chat_session_list_local = running_chat_session_list
+    running_chat_session_list_local.each do |session|
       next if !session['user_id']
 
       user = User.lookup(id: session['user_id'])
@@ -84,16 +84,18 @@ class Chat < ApplicationModel
       assets = user.assets(assets)
     end
     {
-      waiting_chat_count:        waiting_chat_count,
-      waiting_chat_session_list: waiting_chat_session_list,
-      running_chat_count:        running_chat_count,
-      running_chat_session_list: runningchat_session_list_local,
-      active_agent_count:        active_agent_count,
-      active_agent_ids:          active_agent_ids,
-      seads_available:           seads_available,
-      seads_total:               seads_total,
-      active:                    Chat::Agent.state(user_id),
-      assets:                    assets,
+      waiting_chat_count:                waiting_chat_count,
+      waiting_chat_count_by_chat:        waiting_chat_count_by_chat,
+      waiting_chat_session_list:         waiting_chat_session_list,
+      waiting_chat_session_list_by_chat: waiting_chat_session_list_by_chat,
+      running_chat_count:                running_chat_count,
+      running_chat_session_list:         running_chat_session_list_local,
+      active_agent_count:                active_agent_count,
+      active_agent_ids:                  active_agent_ids,
+      seads_available:                   seads_available,
+      seads_total:                       seads_total,
+      active:                            Chat::Agent.state(user_id),
+      assets:                            assets,
     }
   end
 
@@ -109,10 +111,29 @@ class Chat < ApplicationModel
     Chat::Session.where(state: ['waiting']).count
   end
 
+  def self.waiting_chat_count_by_chat
+    list = {}
+    Chat.where(active: true).pluck(:id).each do |chat_id|
+      list[chat_id] = Chat::Session.where(chat_id: chat_id, state: ['waiting']).count
+    end
+    list
+  end
+
   def self.waiting_chat_session_list
     sessions = []
     Chat::Session.where(state: ['waiting']).each do |session|
       sessions.push session.attributes
+    end
+    sessions
+  end
+
+  def self.waiting_chat_session_list_by_chat
+    sessions = {}
+    Chat.where(active: true).pluck(:id).each do |chat_id|
+      Chat::Session.where(chat_id: chat_id, state: ['waiting']).each do |session|
+        sessions[chat_id] ||= []
+        sessions[chat_id].push session.attributes
+      end
     end
     sessions
   end
