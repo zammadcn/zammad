@@ -5,7 +5,11 @@ class Sessions::Event::ChatSessionStart < Sessions::Event::ChatBase
     return if !permission_check('chat.agent', 'chat')
 
     # find first in waiting list
-    chat_session = Chat::Session.where(state: 'waiting').order(created_at: :asc).first
+    chat_session = if @payload['chat_id']
+                     Chat::Session.where(state: 'waiting', chat_id: @payload['chat_id']).order(created_at: :asc).first
+                   else
+                     Chat::Session.where(state: 'waiting').order(created_at: :asc).first
+                   end
     if !chat_session
       return {
         event: 'chat_session_start',
@@ -20,33 +24,40 @@ class Sessions::Event::ChatSessionStart < Sessions::Event::ChatBase
     chat_session.preferences[:participants] = chat_session.add_recipient(@client_id)
     chat_session.save
 
-    # send chat_session_init to client
-    chat_user = User.lookup(id: chat_session.user_id)
-    url = nil
-    if chat_user.image && chat_user.image != 'none'
-      url = "#{Setting.get('http_type')}://#{Setting.get('fqdn')}/api/v1/users/image/#{chat_user.image}"
+    session_attributes = chat_session.attributes
+    session_attributes['messages'] = []
+    Chat::Message.where(chat_session_id: chat_session.id).order(created_at: :asc).each do |message|
+      session_attributes['messages'].push message.attributes
     end
-    user = {
-      name:   chat_user.fullname,
-      avatar: url,
-    }
-    data = {
-      event: 'chat_session_start',
-      data:  {
-        state:      'ok',
-        agent:      user,
-        session_id: chat_session.session_id,
-        chat_id:    chat_session.chat_id,
-      },
-    }
-    # send to customer
-    chat_session.send_to_recipients(data, @client_id)
+
+    # send chat_session_init to customer client
+    if session_attributes['messages'].blank?
+      chat_user = User.lookup(id: chat_session.user_id)
+      url = nil
+      if chat_user.image && chat_user.image != 'none'
+        url = "#{Setting.get('http_type')}://#{Setting.get('fqdn')}/api/v1/users/image/#{chat_user.image}"
+      end
+      user = {
+        name:   chat_user.fullname,
+        avatar: url,
+      }
+      data = {
+        event: 'chat_session_start',
+        data:  {
+          state:      'ok',
+          agent:      user,
+          session_id: chat_session.session_id,
+          chat_id:    chat_session.chat_id,
+        },
+      }
+      chat_session.send_to_recipients(data, @client_id)
+    end
 
     # send to agent
     data = {
       event: 'chat_session_start',
       data:  {
-        session: chat_session.attributes,
+        session: session_attributes,
       },
     }
     Sessions.send(@client_id, data)
